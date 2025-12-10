@@ -1,13 +1,50 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>検証ラボ（仮） - kenshow_labo</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <title>検証ラボ - Kenshow Labo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1>検証ラボ（仮）</h1>
-  <p>ここにレース・血統データの閲覧UIを作っていきます。</p>
+  <header>
+    <h1>検証ラボ</h1>
+    <p class="subtitle">競馬データで遊ぶ、個人用の研究室</p>
+  </header>
+
+  <main>
+    <section id="status">
+      <h2>📊 現在のステータス</h2>
+      <ul>
+        <li>GitHub Pages の公開環境：<span class="ok">準備完了</span></li>
+        <li>データ格納フォルダ（data/）：<span class="pending">これから整備</span></li>
+        <li>ビューア・検証用UI：<span class="pending">これから実装</span></li>
+      </ul>
+    </section>
+
+    <section id="viewer">
+      <h2>🧪 サンプルデータビューア（仮）</h2>
+      <p>今はまだダミーデータですが、将来的にはレース結果や指数をここに表示していきます。</p>
+      <button id="load-sample-button">ダミーデータを読み込む</button>
+      <div id="sample-output" class="card"></div>
+    </section>
+
+    <section id="plan">
+      <h2>📝 今後の予定メモ</h2>
+      <ol>
+        <li>ダービー（東京優駿）サンプルデータを JSON 化して <code>data/results_XXXX.json</code> に保存</li>
+        <li><code>app.js</code> から JSON を fetch して一覧表示</li>
+        <li>レース名・年・馬名などでの簡易検索機能を追加</li>
+        <li>過去レース結果から、簡単な指数や集計を試す</li>
+      </ol>
+    </section>
+  </main>
+
+  <footer>
+    <small>kenshow_labo / 検証ラボ</small>
+  </footer>
+
   <script src="app.js"></script>
 </body>
 </html>
