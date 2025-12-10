@@ -1,0 +1,22 @@
+[
+  {
+    "raceId": "2023-derby",
+    "raceName": "第90回 東京優駿",
+    "date": "2023-05-28",
+    "course": "東京 芝2400m",
+    "grade": "GI",
+    "horseName": "サンプルホースA",
+    "finish": 1,
+    "odds": 2.4
+  },
+  {
+    "raceId": "2023-derby",
+    "raceName": "第90回 東京優駿",
+    "date": "2023-05-28",
+    "course": "東京 芝2400m",
+    "grade": "GI",
+    "horseName": "サンプルホースB",
+    "finish": 2,
+    "odds": 5.6
+  }
+]
