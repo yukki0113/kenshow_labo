@@ -1,0 +1,5 @@
+# DB 接続情報（実物）はコミットしない
+src/scraping/dbconfig.json
+
+# もし .env などを使う場合はここに追加
+.env
