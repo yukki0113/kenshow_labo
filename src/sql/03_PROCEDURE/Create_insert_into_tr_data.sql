@@ -1,4 +1,4 @@
-CREATE PROCEDURE [Insert_Into_TRData] AS
+CREATE OR ALTER PROCEDURE [Insert_Into_TRData] AS
 BEGIN 
 
     /* 完走 */
@@ -91,15 +91,15 @@ BEGIN
         , CONVERT(DATE, CONCAT(SUBSTRING([日付], 1, CHARINDEX('年', [日付]) - 1), FORMAT(CONVERT(INT, SUBSTRING([日付], CHARINDEX('年', [日付]) + 1, CHARINDEX('月', [日付]) - CHARINDEX('年', [日付]) - 1)), '00'), FORMAT(CONVERT(INT, SUBSTRING([日付], CHARINDEX('月', [日付]) + 1, CHARINDEX('日', [日付]) - CHARINDEX('月', [日付]) - 1)), '00'))) AS [日付]
         , [開催]
         , CASE 
-          WHEN [レース名] LIKE '%(G1)%' 
-            THEN 'GI' 
-          WHEN [レース名] LIKE '%(G2)%' 
-            THEN 'GII' 
-          WHEN [レース名] LIKE '%(G3)%' 
-            THEN 'GIII' 
-          WHEN [レース名] LIKE '%(L)%' 
-            THEN CONCAT([クラス], '(L)') 
-          ELSE [クラス] 
+            WHEN [レース名] LIKE '%(GI)%' OR [レース名] LIKE '%(G1)%'
+              THEN 'G1' 
+            WHEN [レース名] LIKE '%(GII)%' OR [レース名] LIKE '%(G2)%'
+              THEN 'G2' 
+            WHEN [レース名] LIKE '%(GIII)%' OR [レース名] LIKE '%(G3)%'
+              THEN 'G3' 
+            WHEN [レース名] LIKE '%(L)%' 
+              THEN CONCAT([クラス], '(L)') 
+            ELSE [クラス] 
           END AS [クラス]
         , [芝_ダート]
         , CAST([距離] AS INT) AS [距離]
@@ -213,15 +213,15 @@ BEGIN
         , CONVERT(DATE, CONCAT(SUBSTRING([日付], 1, CHARINDEX('年', [日付]) - 1), FORMAT(CONVERT(INT, SUBSTRING([日付], CHARINDEX('年', [日付]) + 1, CHARINDEX('月', [日付]) - CHARINDEX('年', [日付]) - 1)), '00'), FORMAT(CONVERT(INT, SUBSTRING([日付], CHARINDEX('月', [日付]) + 1, CHARINDEX('日', [日付]) - CHARINDEX('月', [日付]) - 1)), '00'))) AS [日付]
         , [開催] AS [開催]
         , CASE 
-          WHEN [レース名] LIKE '%(G1)%' 
-            THEN 'GI' 
-          WHEN [レース名] LIKE '%(G2)%' 
-            THEN 'GII' 
-          WHEN [レース名] LIKE '%(G3)%' 
-            THEN 'GIII' 
-          WHEN [レース名] LIKE '%(L)%' 
-            THEN CONCAT([クラス], '(L)') 
-          ELSE [クラス] 
+            WHEN [レース名] LIKE '%(GI)%' OR [レース名] LIKE '%(G1)%'
+              THEN 'G1' 
+            WHEN [レース名] LIKE '%(GII)%' OR [レース名] LIKE '%(G2)%'
+              THEN 'G2' 
+            WHEN [レース名] LIKE '%(GIII)%' OR [レース名] LIKE '%(G3)%'
+              THEN 'G3' 
+            WHEN [レース名] LIKE '%(L)%' 
+              THEN CONCAT([クラス], '(L)') 
+            ELSE [クラス] 
           END AS [クラス]
         , [芝_ダート] AS [芝_ダート]
         , CAST([距離] AS INT) AS [距離]
