@@ -1,30 +1,17 @@
 import argparse
-import time
 import re
-import requests
-from bs4 import BeautifulSoup
 
 from DBUtil import get_database_connection, execute_bulk_insert
-
-# ユーザーエージェント（血統バッチと同等のものを使用する想定）
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/143.0.0.0 Safari/537.36"
-    )
-}
-
+from common import (
+    SleepController,
+    fetch_soup,
+    build_race_url,
+    log_info,
+    log_warn,
+    log_error,
+)
 BETTYPE_TANSHO = "単勝"
 BETTYPE_FUKUSHO = "複勝"
-
-
-def build_race_url(race_id: str) -> str:
-    """
-    race_id から netkeiba のレース結果ページURLを組み立てる。
-    例: 202406050811 → https://db.netkeiba.com/race/202406050811/
-    """
-    return f"https://db.netkeiba.com/race/{race_id}/"
 
 
 def fetch_target_race_ids(max_count: int):
@@ -69,29 +56,18 @@ def fetch_target_race_ids(max_count: int):
         connection.close()
 
 
-def fetch_race_page(race_id: str):
+def fetch_race_page(race_id: str, sleeper=None):
     """
     1レースぶんの結果ページを取得し、BeautifulSoup オブジェクトを返す。
 
     ・接続エラーやステータスコード異常時は None を返す
     """
     url = build_race_url(race_id)
-    print(f"[INFO] Fetching: {url}")
-
-    try:
-        response = requests.get(url, headers=HEADERS, timeout=10)
-    except requests.exceptions.RequestException as e:
-        print(f"[ERROR] HTTP リクエスト失敗: race_id={race_id}, error={e}")
-        return None
-
-    if response.status_code != 200:
-        print(f"[ERROR] ステータスコード異常: race_id={race_id}, status={response.status_code}")
-        return None
-
-    # netkeiba は EUC-JP ベースのため decode してからパース
-    html = response.content.decode("euc-jp", "ignore")
-    soup = BeautifulSoup(html, "html.parser")
+    soup = fetch_soup(url, sleeper=sleeper)
+    if soup is None:
+        log_error(f"race_id={race_id}: ページ取得に失敗しました。")
     return soup
+
 
 
 def _parse_int_from_text(text: str):
@@ -165,7 +141,7 @@ def parse_payouts_single_race(soup: BeautifulSoup):
             break
 
     if payout_table is None:
-        print("[WARN] 払戻情報テーブルが見つかりませんでした。")
+        log_warn("払戻情報テーブルが見つかりませんでした。")
         return results
 
     current_bet_type = None
@@ -274,43 +250,51 @@ def insert_payout_records(race_id: str, payout_list):
         print(f"[ERROR] INSERT 失敗: race_id={race_id}, error={e}")
 
 
-def process_payouts(max_count: int, batch_size: int = 50, wait_minutes: int = 30):
+def process_payouts(
+    max_count: int,
+    per_request_sec: float = 0.5,
+    batch_size: int = 50,
+    wait_minutes: int = 30,
+):
     """
     払戻未取得レースを対象に、単勝・複勝の払戻を取得して TR_Payout にINSERTする。
 
-    max_count    : 今回処理する最大レース数
-    batch_size   : 何レースごとにインターバルを入れるか
-    wait_minutes : インターバル（分）
+    max_count      : 今回処理する最大レース数
+    per_request_sec: 1レースごとのリクエスト間隔（秒）
+    batch_size     : 何レースごとにインターバルを入れるか
+    wait_minutes   : インターバル（分）
     """
-    print("[INFO] 払戻未取得レースを検索中...")
+    log_info("払戻未取得レースを検索中...")
     race_ids = fetch_target_race_ids(max_count=max_count)
-    print(f"[INFO] 対象 race_id 件数: {len(race_ids)}")
+    log_info(f"対象 race_id 件数: {len(race_ids)}")
 
     if not race_ids:
-        print("[INFO] 処理対象レースはありません。終了します。")
+        log_info("処理対象レースはありません。終了します。")
         return
+
+    sleeper = SleepController(
+        per_request_sec=per_request_sec,
+        batch_size=batch_size,
+        batch_interval_sec=wait_minutes * 60,
+    )
 
     processed = 0
 
     for race_id in race_ids:
-        soup = fetch_race_page(race_id)
+        soup = fetch_race_page(race_id, sleeper=sleeper)
         if soup is None:
-            print(f"[ERROR] race_id={race_id}: ページ取得に失敗したためスキップします。")
+            log_error(f"race_id={race_id}: ページ取得に失敗したためスキップします。")
             continue
 
         payouts = parse_payouts_single_race(soup)
         if not payouts:
-            print(f"[WARN] race_id={race_id}: 単勝・複勝の払戻が見つかりませんでした。")
+            log_warn(f"race_id={race_id}: 単勝・複勝の払戻が見つかりませんでした。")
             continue
 
         insert_payout_records(race_id, payouts)
         processed += 1
 
-        if processed % batch_size == 0:
-            print(f"[INFO] {processed}レース処理したので {wait_minutes}分休止します...")
-            time.sleep(wait_minutes * 60)
-
-    print(f"[INFO] 今回の処理完了。処理レース数 = {processed}")
+    log_info(f"今回の処理完了。処理レース数 = {processed}")
 
 
 def test_single_race(race_id: str):
@@ -320,7 +304,7 @@ def test_single_race(race_id: str):
     """
     soup = fetch_race_page(race_id)
     if soup is None:
-        print("[ERROR] ページ取得に失敗しました。")
+        log_error("ページ取得に失敗しました。")
         return
 
     payouts = parse_payouts_single_race(soup)
@@ -329,7 +313,7 @@ def test_single_race(race_id: str):
         print(
             f"式別={p['式別']}, 馬番1={p['馬番1']}, 払戻金={p['払戻金']}, 人気={p['人気']}"
         )
-    print(f"[INFO] レコード数: {len(payouts)}")
+    log_info(f"レコード数: {len(payouts)}")
 
 
 def main():
@@ -356,6 +340,12 @@ def main():
         help="今回の実行で処理する最大レース数（デフォルト100件）",
     )
     parser.add_argument(
+        "--per-request-sec",
+        type=float,
+        default=0.5,
+        help="1レースごとのリクエスト間隔（秒）（デフォルト 0.5秒）",
+    )
+    parser.add_argument(
         "--batch-size",
         type=int,
         default=50,
@@ -371,18 +361,19 @@ def main():
     args = parser.parse_args()
 
     if args.test_race_id:
-        print("[INFO] 固定 race_id でテスト実行します。")
+        log_info("固定 race_id でテスト実行します。")
         test_single_race(args.test_race_id)
-        print("[INFO] テスト終了。")
+        log_info("テスト終了。")
         return
 
     process_payouts(
         max_count=args.max_count,
+        per_request_sec=args.per_request_sec,
         batch_size=args.batch_size,
         wait_minutes=args.wait_minutes,
     )
 
 
 if __name__ == "__main__":
-    print("ScrapePayoutFromDB: script started")
+    log_info("payout.py: script started")
     main()

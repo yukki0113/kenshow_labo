@@ -1,7 +1,4 @@
 import argparse
-import time
-import requests
-from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -9,16 +6,14 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 from DBUtil import get_database_connection, execute_sql_query
-
-
-# ユーザーエージェント（ScrapeRaceToDB.py と同等のものを使用）
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/143.0.0.0 Safari/537.36"
-    )
-}
+from common import (
+    SleepController,
+    fetch_soup,
+    build_horse_url,
+    log_info,
+    log_warn,
+    log_error,
+)
 
 
 def fetch_tr_horse_ids():
@@ -80,38 +75,20 @@ def fetch_pedigree_horse_ids():
         connection.close()
 
 
-def build_horse_url(horse_id: str) -> str:
-    """
-    horse_id から netkeiba の馬ページURLを組み立てる。
-
-    例: horse_id = '2019103422'
-        → 'https://db.netkeiba.com/horse/2019103422/'
-    """
-    return f"https://db.netkeiba.com/horse/{horse_id}/"
-
-
-def fetch_horse_page(horse_id: str):
+def fetch_horse_page(horse_id: str, sleeper=None):
     """
     1頭ぶんの馬ページを取得し、BeautifulSoup オブジェクトを返す。
 
     ・接続に失敗した場合は None を返す
     """
     url = build_horse_url(horse_id)
-    print(f"[INFO] Fetching: {url}")
-
-    try:
-        response = requests.get(url, headers=HEADERS, timeout=10)
-    except requests.exceptions.RequestException as e:
-        print(f"[ERROR] Request failed: {e}")
-        return None
-
-    # netkeiba は EUC-JP ベースのため decode してからパース
-    html = response.content.decode("euc-jp", "ignore")
-    soup = BeautifulSoup(html, "html.parser")
+    soup = fetch_soup(url, sleeper=sleeper)
+    if soup is None:
+        log_error(f"horse_id={horse_id}: ページ取得に失敗しました。")
     return soup
 
 
-def fetch_horse_page_selenium(horse_id: str):
+def fetch_horse_page_selenium(horse_id: str, sleeper=None):
     """
     Selenium を使って馬ページを開き、JavaScript 実行後の HTML を取得する。
 
@@ -119,9 +96,12 @@ def fetch_horse_page_selenium(horse_id: str):
     ・戻り値: BeautifulSoup オブジェクト（失敗時は None）
     """
     url = build_horse_url(horse_id)
-    print(f"[INFO][SELENIUM] Fetching: {url}")
+    log_info(f"[SELENIUM] Fetching: {url}")
 
-    # Chrome をヘッドレスモード（画面を出さないモード）で起動
+    # アクセス間隔制御（必要に応じて）
+    if sleeper is not None:
+        sleeper.before_request()
+
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument("--disable-gpu")
@@ -132,7 +112,6 @@ def fetch_horse_page_selenium(horse_id: str):
     try:
         driver.get(url)
 
-        # 血統タブの table.blood_table が現れるまで最大10秒待機
         try:
             WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located(
@@ -140,7 +119,7 @@ def fetch_horse_page_selenium(horse_id: str):
                 )
             )
         except Exception:
-            print("[WARN] blood_table が見つかりませんでした（タイムアウト）。")
+            log_warn("blood_table が見つかりませんでした（タイムアウト）。")
 
         html = driver.page_source
         soup = BeautifulSoup(html, "html.parser")
@@ -148,7 +127,6 @@ def fetch_horse_page_selenium(horse_id: str):
 
     finally:
         driver.quit()
-
 
 def extract_pedigree_2gen(soup):
     """
@@ -221,23 +199,23 @@ def extract_pedigree_2gen(soup):
     return father, mother, father_father, father_mother, mother_father, mother_mother
 
 
-def process_unregistered_horses(max_count: int, batch_size: int = 100, wait_minutes: int = 30):
+def process_unregistered_horses(
+    max_count: int,
+    per_request_sec: float = 0.5,
+    batch_size: int = 100,
+    wait_minutes: int = 30,
+):
     """
     TR_raceresult / MT_HorsePedigree を突合し、
-    「TR にいて MT にいない horse_id」を対象に、
-    血統情報(父・母・祖父母)を取得して MT_HorsePedigree にINSERTする。
-
-    max_count    : 今回の実行で何頭まで処理するか（安全のため上限）
-    batch_size   : 何頭ごとにインターバルを入れるか
-    wait_minutes : インターバルの長さ（分）
+    「TR にいて MT にいない horse_id」を対象に血統情報を取得して INSERT する。
     """
-    print("[INFO] TR_raceresult から horse_id 一覧を取得中...")
+    log_info("TR_raceresult から horse_id 一覧を取得中...")
     tr_horses = fetch_tr_horse_ids()
-    print(f"[INFO] TR_raceresult 側 horse_id 件数: {len(tr_horses)}")
+    log_info(f"TR_raceresult 側 horse_id 件数: {len(tr_horses)}")
 
-    print("[INFO] MT_HorsePedigree から既存 horse_id を取得中...")
+    log_info("MT_HorsePedigree から既存 horse_id を取得中...")
     mt_ids = fetch_pedigree_horse_ids()
-    print(f"[INFO] MT_HorsePedigree 側 horse_id 件数: {len(mt_ids)}")
+    log_info(f"MT_HorsePedigree 側 horse_id 件数: {len(mt_ids)}")
 
     # 差分抽出
     target_horses = []
@@ -247,34 +225,39 @@ def process_unregistered_horses(max_count: int, batch_size: int = 100, wait_minu
         if horse_id not in mt_ids:
             target_horses.append((horse_id, horse_name))
 
-    print(f"[INFO] 未登録（TR にいて MT にいない）horse_id 件数: {len(target_horses)}")
+    log_info(f"未登録（TR にいて MT にいない）horse_id 件数: {len(target_horses)}")
 
     if not target_horses:
-        print("[INFO] 新規に取得すべき horse_id はありません。処理を終了します。")
+        log_info("新規に取得すべき horse_id はありません。処理を終了します。")
         return
 
+    # アクセス間隔制御（Selenium アクセスも含めて制御）
+    sleeper = SleepController(
+        per_request_sec=per_request_sec,
+        batch_size=batch_size,
+        batch_interval_sec=wait_minutes * 60,
+    )
     processed = 0
 
     for horse_id, horse_name in target_horses:
         if processed >= max_count:
-            print(f"[INFO] max_count={max_count} に達したため処理を終了します。")
+            log_info(f"max_count={max_count} に達したため処理を終了します。")
             break
 
         print("======================================")
-        print(f"[INFO] 処理対象 horse_id = {horse_id}, 馬名 = {horse_name}")
+        log_info(f"処理対象 horse_id = {horse_id}, 馬名 = {horse_name}")
 
         # 馬ページ取得（Selenium）
-        soup = fetch_horse_page_selenium(horse_id)
+        soup = fetch_horse_page_selenium(horse_id, sleeper=sleeper)
         if soup is None:
-            print("[WARN] soup が取得できなかったためスキップします。")
+            log_warn("soup が取得できなかったためスキップします。")
             continue
 
         # 血統抽出
         father, mother, ff, fm, mf, mm = extract_pedigree_2gen(soup)
 
-        # 何も取れなかった場合はスキップ（念のため）
         if not father and not mother and not ff and not fm and not mf and not mm:
-            print("[WARN] 血統情報が取得できなかったためスキップします。")
+            log_warn("血統情報が取得できなかったためスキップします。")
             continue
 
         # INSERT
@@ -291,13 +274,7 @@ def process_unregistered_horses(max_count: int, batch_size: int = 100, wait_minu
 
         processed += 1
 
-        # 負荷対策：batch_size 頭ごとにインターバル
-        if processed % batch_size == 0:
-            print(f"[INFO] {processed}頭処理したので {wait_minutes}分休止します...")
-            time.sleep(wait_minutes * 60)
-
-    print(f"[INFO] 今回の処理完了。処理頭数 = {processed}")
-
+    log_info(f"今回の処理完了。処理頭数 = {processed}")
 
 def insert_pedigree_record(
     horse_id: str,
@@ -331,9 +308,9 @@ def insert_pedigree_record(
 
     try:
         execute_sql_query(sql, args)
-        print(f"[INFO] INSERT 完了: horse_id={horse_id}, 馬名={horse_name}")
+        log_info(f"INSERT 完了: horse_id={horse_id}, 馬名={horse_name}")
     except Exception as e:
-        print(f"[ERROR] INSERT 失敗: horse_id={horse_id}, error={e}")
+        log_error(f"INSERT 失敗: horse_id={horse_id}, error={e}")
 
 
 def dump_horse_page_for_debug(horse_id: str):
@@ -346,9 +323,9 @@ def dump_horse_page_for_debug(horse_id: str):
       - ページテキストの冒頭
       を print する。
     """
-    soup = fetch_horse_page_selenium(horse_id)
+    soup = fetch_horse_page_selenium(horse_id: str)
     if soup is None:
-        print("[WARN] soup が取得できませんでした。")
+        log_warn("soup が取得できませんでした。")
         return
 
     # ページタイトル
@@ -402,6 +379,12 @@ def main():
         help="テスト用に 1頭だけ指定して取得する horse_id（例: 2019103422）",
     )
     parser.add_argument(
+        "--per-request-sec",
+        type=float,
+        default=0.5,
+        help="1頭ごとのリクエスト間隔（秒）（デフォルト 0.5秒）",
+    )
+    parser.add_argument(
         "--max-count",
         type=int,
         default=1,
@@ -424,19 +407,20 @@ def main():
 
     # 1) 固定 horse_id で 1件だけ試すモード（開発・調査用）
     if args.test_horse_id:
-        print("[INFO] 固定 horse_id でテスト実行します。")
+        log_info("固定 horse_id でテスト実行します。")
         dump_horse_page_for_debug(args.test_horse_id)
-        print("[INFO] テスト終了。")
+        log_info("テスト終了。")
         return
 
     # 2) バッチモード（差分を回してINSERT）
     process_unregistered_horses(
         max_count=args.max_count,
+        per_request_sec=args.per_request_sec,
         batch_size=args.batch_size,
         wait_minutes=args.wait_minutes,
     )
 
 
 if __name__ == "__main__":
-    print("ScrapePedigreeFromDB: script started")
+    log_info("pedigree.py: script started")
     main()

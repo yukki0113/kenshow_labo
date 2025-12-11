@@ -1,19 +1,17 @@
-import requests
-from bs4 import BeautifulSoup
 import time
 import argparse
 import re
 
 from DBUtil import execute_bulk_insert, execute_stored_procedure, execute_sql_query
-
-# ユーザーエージェント（他バッチと共通の UA）
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/143.0.0.0 Safari/537.36"
-    )
-}
+from common import (
+    SleepController,
+    fetch_soup,
+    build_race_url,
+    extract_horse_id_from_href,
+    log_info,
+    log_warn,
+    log_error,
+)
 
 
 def truncate_table():
@@ -119,7 +117,7 @@ def parse_race_condition_from_spans(soup_span, url):
             continue
 
     if not (sur or dis or con or wed):
-        print(f"[WARN] レース条件情報の解析に失敗: {url}")
+        log_warn(f"レース条件情報の解析に失敗: {url}")
 
     return sur, rou, dis, con, wed
 
@@ -170,15 +168,16 @@ def debug_single_race(race_id: str):
     DBへのINSERTは行わない。
     """
     url = build_race_url(race_id)
-    print(f"[INFO] Debug fetch: {url}")
+    log_info(f"Debug fetch: {url}")
 
-    try:
-        response = requests.get(url, headers=HEADERS, timeout=10)
-    except requests.exceptions.RequestException as e:
-        print(f"[ERROR] HTTP リクエスト失敗: {e}")
+    soup = fetch_soup(url)
+    if soup is None:
+        log_error("ページ取得に失敗しました。")
         return
 
-    soup = BeautifulSoup(response.content.decode("euc-jp", "ignore"), "html.parser")
+    soup_span = soup.find_all("span")
+    sur, rou, dis, con, wed = parse_race_condition_from_spans(soup_span, url)
+    con, wed = fill_condition_from_page_text(soup, con, wed, url)
 
     # レース条件
     soup_span = soup.find_all("span")
@@ -229,15 +228,33 @@ def debug_single_race(race_id: str):
     print("[INFO] debug_single_race finished.")
 
 
-def scrape_and_insert_race_data(year_start, year_end, place_codes):
+def scrape_and_insert_race_data(
+    year_start,
+    year_end,
+    place_codes,
+    per_request_sec: float,
+    batch_size: int,
+    batch_interval_sec: float,
+):
     """
     指定された年・場コードの範囲で netkeiba をスクレイピングし、
     IF_RaceResult_CSV → TR_RaceResult まで流し込むための
     IF 側データを作成する。
+
+    per_request_sec     : 1リクエストごとに待つ秒数
+    batch_size          : 何リクエストごとにバッチ休憩を入れるか（0なら無効）
+    batch_interval_sec  : バッチ休憩の秒数
     """
 
     # テーブルをTRUNCATE
     truncate_table()
+
+    # アクセス間隔制御
+    sleeper = SleepController(
+        per_request_sec=per_request_sec,
+        batch_size=batch_size,
+        batch_interval_sec=batch_interval_sec,
+    )
 
     for year in range(year_start, year_end + 1):
 
@@ -299,20 +316,15 @@ def scrape_and_insert_race_data(year_start, year_end, place_codes):
 
                         url = build_race_url(current_race_id)
 
-                        try:
-                            # ユーザーエージェントとタイムアウトを付与してリクエスト
-                            r = requests.get(url, headers=HEADERS, timeout=10)
-
-                        # リクエストを投げすぎるとエラーになることがあるため
-                        # 失敗したら10秒待機してリトライする
-                        except requests.exceptions.RequestException as e:
-                            print(f"Error: {e}")
-                            print("Retrying in 10 seconds...")
-                            time.sleep(10)
-                            r = requests.get(url, headers=HEADERS, timeout=10)
-
-                        # バグ対策で decode
-                        soup = BeautifulSoup(r.content.decode("euc-jp", "ignore"), "html.parser")
+                        # 共通 fetch_soup + SleepController 経由で取得
+                        soup = fetch_soup(url, sleeper=sleeper)
+                        if soup is None:
+                            log_warn(f"ページ取得に失敗したためスキップします: {url}")
+                            continueCounter += 1
+                            if continueCounter == 2:
+                                continueCounter = 0
+                                break
+                            continue
                         soup_span = soup.find_all("span")
 
                         # テーブルを指定
@@ -338,10 +350,7 @@ def scrape_and_insert_race_data(year_start, year_end, place_codes):
                                 horse_link_tag = cols[3].find("a")  # 馬名セル内の <a> タグ
                                 if horse_link_tag is not None:
                                     href = horse_link_tag.get("href", "")
-                                    # 例: "/horse/2019101234/" から "2019101234" を抜き出す
-                                    match = re.search(r"/horse/([^/]+)/", href)
-                                    if match:
-                                        horse_id = match.group(1)
+                                    horse_id = extract_horse_id_from_href(href)
                             except Exception:
                                 horse_id = ""
 
@@ -423,13 +432,13 @@ def scrape_and_insert_race_data(year_start, year_end, place_codes):
                             race_data_all.append(race_data)
 
                         # 進捗を表示
-                        print(detail + str(x + 1) + "R")
-
+                        log_info(detail + str(x + 1) + "R")
+                        
                     if yBreakCounter == 12:
                         break
 
         # データベースに挿入
-        print("DBにInsert...")
+        log_info("DBにInsert...")
         insert_race_data_to_database(race_data_all)
 
 
@@ -469,6 +478,28 @@ def main():
         default="01,02,03,04,05,06,07,08,09,10",
         help="取得対象の場コードをカンマ区切りで指定（例: 05,06）"
     )
+    parser.add_argument(
+        "--per-request-sec",
+        type=float,
+        required=False,
+        default=0.5,
+        help="1リクエストごとに待機する秒数（デフォルト: 0.5秒）"
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        required=False,
+        default=0,
+        help="バッチ休憩を入れるリクエスト件数（0ならバッチ休憩なし）"
+    )
+    parser.add_argument(
+        "--batch-interval-sec",
+        type=int,
+        required=False,
+        default=0,
+        help="バッチ休憩の秒数（デフォルト: 0秒）"
+    )
+
 
     args = parser.parse_args()
 
@@ -488,14 +519,21 @@ def main():
     start_time = time.time()
 
     # 本処理
-    scrape_and_insert_race_data(args.year_from, args.year_to, place_codes)
+    scrape_and_insert_race_data(
+        args.year_from,
+        args.year_to,
+        place_codes,
+        args.per_request_sec,
+        args.batch_size,
+        args.batch_interval_sec,
+    )
 
     # IF → TR
-    print("TRテーブルに展開...")
+    log_info("TRテーブルに展開...")
     execute_stored_procedure("Insert_Into_TRData")
 
     # 枠番更新
-    print("枠番更新...")
+    log_info("枠番更新...")
     execute_stored_procedure("UpdateFrameNumbers")
 
     # 処理の終了時刻を記録
@@ -507,10 +545,9 @@ def main():
     elapsed_minutes = (elapsed_seconds % 3600) // 60
     elapsed_remain = elapsed_seconds % 60
 
-    print(f"Total processing time: {elapsed_hours} 時間, {elapsed_minutes} 分, {elapsed_remain} 秒")
-    print("終了")
+    log_info(f"Total processing time: {elapsed_hours} 時間, {elapsed_minutes} 分, {elapsed_remain} 秒")
+    log_info("終了")
 
 
 if __name__ == "__main__":
-    print("ScrapeRaceToDB: script started")
     main()
