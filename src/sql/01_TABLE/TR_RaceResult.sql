@@ -1,5 +1,6 @@
 --* BackupToTempTable
-drop table [TR_RaceResult];
+drop table [TR_RaceResult]
+GO
  
 --* RestoreFromTempTable
 CREATE TABLE [TR_RaceResult] ( 
@@ -7,11 +8,13 @@ CREATE TABLE [TR_RaceResult] (
   , [日付] DATE DEFAULT NULL
   , [レース名] NVARCHAR (50) DEFAULT NULL
   , [クラス] NVARCHAR (20) DEFAULT NULL
+  , [WIN5_flg] TINYINT NOT NULL DEFAULT 0
   , [場名] NVARCHAR (3) DEFAULT NULL
   , [芝_ダート] NVARCHAR (10) DEFAULT NULL
   , [距離] INT DEFAULT NULL
   , [枠番] INT DEFAULT NULL
   , [馬番] INT DEFAULT NULL
+  , [horse_id] VARCHAR(20) NULL
   , [馬名] NVARCHAR (30) DEFAULT NULL
   , [性] NVARCHAR (1) DEFAULT NULL
   , [齢] INT DEFAULT NULL
@@ -34,14 +37,11 @@ CREATE TABLE [TR_RaceResult] (
   , [天気] NVARCHAR (1) DEFAULT NULL
   , [track_id] NVARCHAR(2) DEFAULT NULL
   , PRIMARY KEY (race_id, 馬番)
-) 
-;
+)
+GO
 
-ALTER TABLE TR_raceresult
-ADD horse_id VARCHAR(20) NULL;
+-- CREATE INDEX IX_TR_raceresult_馬名
+-- ON TR_raceresult (馬名);
 
-CREATE INDEX IX_TR_raceresult_馬名
-ON TR_raceresult (馬名);
-
-CREATE INDEX IX_TR_raceresult_horse_id
-ON TR_raceresult (horse_id);
+-- CREATE INDEX IX_TR_raceresult_horse_id
+-- ON TR_raceresult (horse_id);
