@@ -3,3 +3,5 @@ src/scraping/dbconfig.json
 
 # もし .env などを使う場合はここに追加
 .env
+
+src\scraping\__pycache__
