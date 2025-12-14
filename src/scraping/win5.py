@@ -15,6 +15,71 @@ WIN5_RESULTS_URL = (
 )
 
 
+def fetch_existing_win5_dates(
+    date_from: datetime.date,
+    date_to: datetime.date,
+) -> List[datetime.date]:
+    """指定範囲で、既に MT_Win5Target に登録済みの WIN5 実施日を取得する。
+
+    ここでの「登録済み」は、1日あたり 5 レース（leg_no 1〜5）が揃っていることを目安とする。
+    （途中までしか入っていない日付は再取得対象に残す）
+
+    戻り値:
+        登録済み日付のリスト（重複なし）
+    """
+
+    # 日付範囲で絞り込み → 日別に件数を数える
+    sql = """
+        SELECT win5_date
+        FROM MT_Win5Target
+        WHERE win5_date BETWEEN %s AND %s
+        GROUP BY win5_date
+        HAVING COUNT(*) >= 5
+    """
+
+    rows = execute_sql_query(sql, (date_from, date_to))
+    if not rows:
+        return []
+
+    result: List[datetime.date] = []
+    for row in rows:
+        # DBUtil の返り値形に依存しないよう、dict / tuple / list を吸収する
+        win5_date = None
+        if isinstance(row, dict):
+            win5_date = row.get("win5_date")
+        else:
+            # 配列/タプル想定
+            if len(row) >= 1:
+                win5_date = row[0]
+
+        if win5_date is None:
+            continue
+        result.append(win5_date)
+
+    return result
+
+
+def filter_unregistered_dates(
+    all_dates: List[datetime.date],
+    existing_dates: List[datetime.date],
+) -> List[datetime.date]:
+    """all_dates から、既に登録済みの日付を除外して返す。"""
+
+    if not all_dates:
+        return []
+    if not existing_dates:
+        return list(all_dates)
+
+    existing_set = set(existing_dates)
+    filtered: List[datetime.date] = []
+    for d in all_dates:
+        if d in existing_set:
+            continue
+        filtered.append(d)
+
+    return filtered
+
+
 def build_win5_url(date_str: str) -> str:
     """
     YYYYMMDD 形式の文字列から WIN5 対象レースページの URL を組み立てる。
@@ -200,6 +265,7 @@ def update_win5_master(
     batch_wait_minutes: int = 30,
     dry_run: bool = False,
     debug: bool = False,
+    skip_existing: bool = True,
 ) -> None:
     """
     指定年範囲の WIN5 実施日を一覧ページから取得し、
@@ -227,6 +293,25 @@ def update_win5_master(
     log_info(
         f"{year_from}〜{year_to} 年の WIN5 実施日として合計 {len(all_dates)} 日を検出しました。"
     )
+
+    # ---------------------------------
+    # 既に取得済みの日付は、WIN5ページへアクセスしない
+    # ---------------------------------
+    if skip_existing and len(all_dates) > 0:
+        date_from = min(all_dates)
+        date_to = max(all_dates)
+
+        existing_dates = fetch_existing_win5_dates(date_from=date_from, date_to=date_to)
+        if len(existing_dates) > 0:
+            before_count = len(all_dates)
+            all_dates = filter_unregistered_dates(all_dates, existing_dates)
+            after_count = len(all_dates)
+            skipped_count = before_count - after_count
+            log_info(
+                f"既に登録済みのため {skipped_count} 日をスキップします（対象: {after_count} 日）。"
+            )
+        else:
+            log_info("登録済み日付は検出されませんでした。全日付を処理します。")
 
     for win5_date in all_dates:
         process_single_date(
