@@ -14,7 +14,7 @@
       output.textContent = "読み込み中...";
 
       // ここで JSON を読み込む
-      fetch("./data/results/results_2023_derby_sample.json")
+      fetch("./data/results/results_2024_sample.json")
         .then(function (response) {
           if (!response.ok) {
             throw new Error("HTTP error " + response.status);
