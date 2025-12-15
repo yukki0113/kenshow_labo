@@ -1,5 +1,6 @@
 import argparse
 import re
+from bs4 import BeautifulSoup
 
 from DBUtil import get_database_connection, execute_bulk_insert
 from common import (
@@ -245,10 +246,10 @@ def insert_payout_records(race_id: str, payout_list):
 
     try:
         execute_bulk_insert(sql, values)
-        print(f"[INFO] INSERT 完了: race_id={race_id}, 件数={len(values)}")
+        log_info(f"INSERT 完了: race_id={race_id}, 件数={len(values)}")
     except Exception as e:
-        print(f"[ERROR] INSERT 失敗: race_id={race_id}, error={e}")
-
+        log_error(f"INSERT 失敗: race_id={race_id}, error={e}")
+        
 
 def process_payouts(
     max_count: int,
