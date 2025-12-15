@@ -27,6 +27,7 @@ BEGIN
         , [日付]
         , [開催]
         , [クラス]
+        , [classSimple]
         , [芝_ダート]
         , [距離]
         , [回り]
@@ -129,6 +130,20 @@ BEGIN
               THEN CONCAT(F.[クラス], '(L)') 
             ELSE F.[クラス] 
           END AS [クラス]
+        , CASE
+            WHEN F.classSrc IS NULL OR LTRIM(RTRIM(F.classSrc)) = N'' THEN NULL
+            WHEN F.classSrc LIKE N'%新馬%' THEN N'新馬'
+            WHEN F.classSrc LIKE N'%未勝利%' THEN N'未勝利'
+            WHEN F.classSrc LIKE N'%500万%' OR F.classSrc LIKE N'%1勝クラス%' THEN N'1勝クラス'
+            WHEN F.classSrc LIKE N'%1000万%' OR F.classSrc LIKE N'%2勝クラス%' THEN N'2勝クラス'
+            WHEN F.classSrc LIKE N'%1500万%' OR F.classSrc LIKE N'%3勝クラス%' THEN N'3勝クラス'
+            WHEN F.classSrc = N'L' OR F.classSrc LIKE N'%(L)%' THEN N'L'
+            WHEN F.classSrc = N'OP' OR F.classSrc LIKE N'%オープン%' THEN N'OP'
+            WHEN F.classSrc = N'G3' OR F.classSrc LIKE N'%GIII%' OR F.classSrc LIKE N'%G3%' THEN N'G3'
+            WHEN F.classSrc = N'G2' OR F.classSrc LIKE N'%GII%'  OR F.classSrc LIKE N'%G2%' THEN N'G2'
+            WHEN F.classSrc = N'G1' OR F.classSrc LIKE N'%GI%'   OR F.classSrc LIKE N'%G1%' THEN N'G1'
+            ELSE F.classSrc
+          END AS [classSimple]
         , F.[芝_ダート]
         , CAST(F.[距離] AS INT) AS [距離]
         , F.[回り]
@@ -136,11 +151,28 @@ BEGIN
         , F.[天気]
         , F.track_id
         , F.[場名] 
-        , CASE WHEN W.race_id IS NOT NULL THEN 1 ELSE 0 END AS WIN5_flg
+        , F.WIN5_flg AS WIN5_flg
       FROM
-        IF_RaceResult_CSV F
-        LEFT JOIN MT_Win5Target W
-          ON W.race_id = F.race_id
+        (
+        SELECT
+              F.*
+            , CASE WHEN W.race_id IS NOT NULL THEN 1 ELSE 0 END AS WIN5_flg
+            , CASE 
+                WHEN F.[レース名] LIKE '%(GI)%' OR F.[レース名] LIKE '%(G1)%'
+                  THEN 'G1' 
+                WHEN F.[レース名] LIKE '%(GII)%' OR F.[レース名] LIKE '%(G2)%'
+                  THEN 'G2' 
+                WHEN F.[レース名] LIKE '%(GIII)%' OR F.[レース名] LIKE '%(G3)%'
+                  THEN 'G3' 
+                WHEN F.[レース名] LIKE '%(L)%' 
+                  THEN 'L'
+                ELSE F.[クラス] 
+              END AS classSrc
+        FROM
+          IF_RaceResult_CSV F
+          LEFT JOIN MT_Win5Target W
+            ON W.race_id = F.race_id
+      ) F
       WHERE
         ISNUMERIC(F.[着順]) = 1
         AND NOT EXISTS ( 
@@ -179,6 +211,7 @@ BEGIN
         , [日付]
         , [開催]
         , [クラス]
+        , [classSimple]
         , [芝_ダート]
         , [距離]
         , [回り]
@@ -223,7 +256,7 @@ BEGIN
           ELSE CAST(PARSENAME(REPLACE (F.[通過順], '-', '.'), 1) AS INT) 
           END AS [通過順_4角]
         , CASE WHEN F.[着順] = N'中' THEN 99 ELSE 0 END AS [着順]
-        , CAST(F.[馬体重] AS INT) AS [馬体重]
+        , CAST(F.[馬体重] AS INT) AS [馬体重] 
         , CAST(F.[馬体重変動] AS INT) AS [馬体重変動]
         , F.[性]
         , CAST(F.[齢] AS INT) AS [齢]
@@ -285,6 +318,20 @@ BEGIN
               THEN CONCAT(F.[クラス], '(L)') 
             ELSE F.[クラス] 
           END AS [クラス]
+        , CASE
+            WHEN F.classSrc IS NULL OR LTRIM(RTRIM(F.classSrc)) = N'' THEN NULL
+            WHEN F.classSrc LIKE N'%新馬%' THEN N'新馬'
+            WHEN F.classSrc LIKE N'%未勝利%' THEN N'未勝利'
+            WHEN F.classSrc LIKE N'%500万%' OR F.classSrc LIKE N'%1勝クラス%' THEN N'1勝クラス'
+            WHEN F.classSrc LIKE N'%1000万%' OR F.classSrc LIKE N'%2勝クラス%' THEN N'2勝クラス'
+            WHEN F.classSrc LIKE N'%1500万%' OR F.classSrc LIKE N'%3勝クラス%' THEN N'3勝クラス'
+            WHEN F.classSrc = N'L' OR F.classSrc LIKE N'%(L)%' THEN N'L'
+            WHEN F.classSrc = N'OP' OR F.classSrc LIKE N'%オープン%' THEN N'OP'
+            WHEN F.classSrc = N'G3' OR F.classSrc LIKE N'%GIII%' OR F.classSrc LIKE N'%G3%' THEN N'G3'
+            WHEN F.classSrc = N'G2' OR F.classSrc LIKE N'%GII%'  OR F.classSrc LIKE N'%G2%' THEN N'G2'
+            WHEN F.classSrc = N'G1' OR F.classSrc LIKE N'%GI%'   OR F.classSrc LIKE N'%G1%' THEN N'G1'
+            ELSE F.classSrc
+          END AS [classSimple]
         , F.[芝_ダート]
         , CAST(F.[距離] AS INT) AS [距離]
         , F.[回り]
@@ -292,11 +339,28 @@ BEGIN
         , F.[天気]
         , F.track_id
         , F.[場名]
-        , CASE WHEN W.race_id IS NOT NULL THEN 1 ELSE 0 END AS WIN5_flg
+        , F.WIN5_flg AS WIN5_flg
       FROM
-        IF_RaceResult_CSV F
-        LEFT JOIN MT_Win5Target W
-          ON W.race_id = F.race_id
+        (
+        SELECT
+              F.*
+            , CASE WHEN W.race_id IS NOT NULL THEN 1 ELSE 0 END AS WIN5_flg
+            , CASE 
+                WHEN F.[レース名] LIKE '%(GI)%' OR F.[レース名] LIKE '%(G1)%'
+                  THEN 'G1' 
+                WHEN F.[レース名] LIKE '%(GII)%' OR F.[レース名] LIKE '%(G2)%'
+                  THEN 'G2' 
+                WHEN F.[レース名] LIKE '%(GIII)%' OR F.[レース名] LIKE '%(G3)%'
+                  THEN 'G3' 
+                WHEN F.[レース名] LIKE '%(L)%' 
+                  THEN 'L'
+                ELSE F.[クラス] 
+              END AS classSrc
+        FROM
+          IF_RaceResult_CSV F
+          LEFT JOIN MT_Win5Target W
+            ON W.race_id = F.race_id
+      ) F
       WHERE
         ISNUMERIC(F.[着順]) = 0
         AND NOT EXISTS ( 
@@ -308,7 +372,6 @@ BEGIN
               T.race_id = F.race_id
               AND T.[馬番] = F.[馬番]
         ) 
-    
+
 END
 GO
-
