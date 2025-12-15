@@ -1,10 +1,49 @@
+# =========================
+# Secrets / Local configs
+# =========================
+
 # DB 接続情報（実物）はコミットしない
 src/scraping/dbconfig.json
 
 # もし .env などを使う場合はここに追加
 .env
 
+# C# 側で接続文字列などをローカル管理する場合（任意）
+src/csharp/**/appsettings.Development.json
+src/csharp/**/appsettings.local.json
+src/csharp/**/secrets.json
+
+# =========================
+# Python
+# =========================
+
 # Python bytecode cache
 __pycache__/
 *.pyc
 *.pyo
+
+# =========================
+# C# / .NET (Visual Studio / VS Code)
+# =========================
+
+# build outputs
+**/bin/
+**/obj/
+
+# Visual Studio folder
+.vs/
+
+# user-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# NuGet（通常は packages は不要。PackageReferenceなら自動復元）
+packages/
+
+# =========================
+# OS
+# =========================
+.DS_Store
+Thumbs.db
