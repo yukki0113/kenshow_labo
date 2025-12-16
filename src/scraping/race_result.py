@@ -304,8 +304,8 @@ def scrape_and_insert_race_data(
                     else:
                         race_id_base = f"{year}{place_code}0{z + 1}{y + 1}"
 
-                    # y の更新を break するためのカウンタ（元ロジックを踏襲）
-                    yBreakCounter = 0
+                    # この開催日の race_id が存在しない（または取得不能）と判断したら、開催日ループを抜ける
+                    should_break_y = False
 
                     # レース数分ループ（12R）
                     for x in range(12):
@@ -323,6 +323,7 @@ def scrape_and_insert_race_data(
                             continueCounter += 1
                             if continueCounter == 2:
                                 continueCounter = 0
+                                should_break_y = True
                                 break
                             continue
                         soup_span = soup.find_all("span")
@@ -338,6 +339,7 @@ def scrape_and_insert_race_data(
                             continueCounter += 1
                             if continueCounter == 2:
                                 continueCounter = 0
+                                should_break_y = True
                                 break
                             continue
 
@@ -434,7 +436,7 @@ def scrape_and_insert_race_data(
                         # 進捗を表示
                         log_info(detail + str(x + 1) + "R")
                         
-                    if yBreakCounter == 12:
+                    if should_break_y:
                         break
 
         # データベースに挿入

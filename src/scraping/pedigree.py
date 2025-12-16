@@ -94,7 +94,11 @@ def fetch_horse_page(horse_id: str, sleeper: SleepController | None = None):
     return soup
 
 
-def fetch_horse_page_selenium(horse_id: str, sleeper: SleepController | None = None):
+def fetch_horse_page_selenium(
+    horse_id: str,
+    sleeper: SleepController | None = None,
+    driver: webdriver.Chrome | None = None,
+):
     """
     Selenium を使って馬ページを開き、JavaScript 実行後の HTML を取得する。
 
@@ -108,13 +112,14 @@ def fetch_horse_page_selenium(horse_id: str, sleeper: SleepController | None = N
     if sleeper is not None:
         sleeper.before_request()
 
-    options = Options()
-    options.add_argument("--headless=new")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--no-sandbox")
-
-    driver = webdriver.Chrome(options=options)
-
+    created_here = False
+    if driver is None:
+        options = Options()
+        options.add_argument("--headless=new")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--no-sandbox")
+        driver = webdriver.Chrome(options=options)
+        created_here = True
     try:
         driver.get(url)
 
@@ -132,7 +137,8 @@ def fetch_horse_page_selenium(horse_id: str, sleeper: SleepController | None = N
         return soup
 
     finally:
-        driver.quit()
+        if created_here:
+            driver.quit()
 
 
 def extract_pedigree_2gen(soup: BeautifulSoup):
@@ -292,40 +298,49 @@ def process_unregistered_horses(
 
     processed = 0
 
-    for horse_id, horse_name in target_horses:
-        if processed >= max_count:
-            log_info(f"max_count={max_count} に達したため処理を終了します。")
-            break
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    driver = webdriver.Chrome(options=options)
 
-        log_info("======================================")
-        log_info(f"処理対象 horse_id = {horse_id}, 馬名 = {horse_name}")
+    try:
+        for horse_id, horse_name in target_horses:
+            if processed >= max_count:
+                log_info(f"max_count={max_count} に達したため処理を終了します。")
+                break
 
-        # 馬ページ取得（Selenium）
-        soup = fetch_horse_page_selenium(horse_id, sleeper=sleeper)
-        if soup is None:
-            log_warn("soup が取得できなかったためスキップします。")
-            continue
+            log_info("======================================")
+            log_info(f"処理対象 horse_id = {horse_id}, 馬名 = {horse_name}")
 
-        # 血統抽出
-        father, mother, ff, fm, mf, mm = extract_pedigree_2gen(soup)
+            # 馬ページ取得（Selenium）
+            soup = fetch_horse_page_selenium(horse_id, sleeper=sleeper, driver=driver)
+            if soup is None:
+                log_warn("soup が取得できなかったためスキップします。")
+                continue
 
-        if not father and not mother and not ff and not fm and not mf and not mm:
-            log_warn("血統情報が取得できなかったためスキップします。")
-            continue
+            # 血統抽出
+            father, mother, ff, fm, mf, mm = extract_pedigree_2gen(soup)
 
-        # INSERT
-        insert_pedigree_record(
-            horse_id=horse_id,
-            horse_name=horse_name,
-            father=father,
-            father_father=ff,
-            father_mother=fm,
-            mother=mother,
-            mother_father=mf,
-            mother_mother=mm,
-        )
+            if not father and not mother and not ff and not fm and not mf and not mm:
+                log_warn("血統情報が取得できなかったためスキップします。")
+                continue
 
-        processed += 1
+            # INSERT
+            insert_pedigree_record(
+                horse_id=horse_id,
+                horse_name=horse_name,
+                father=father,
+                father_father=ff,
+                father_mother=fm,
+                mother=mother,
+                mother_father=mf,
+                mother_mother=mm,
+            )
+
+            processed += 1
+    finally:
+        driver.quit()
 
     log_info(f"今回の処理完了。処理頭数 = {processed}")
 
