@@ -8,21 +8,21 @@ namespace ExportResults
     internal static class RaceJsonBuilder
     {
         /// <summary>
-        /// DBのフラット行を raceId 単位にまとめて RaceJson 配列に変換します。
+        /// 契約VIEWのフラット行を race_id 単位にまとめて RaceJson 配列に変換します。
         /// </summary>
-        public static List<RaceJson> Build(List<RaceResultRow> rows)
+        public static List<RaceJson> Build(List<RaceResultContractRow> rows)
         {
-            // raceId でグルーピングする
-            List<IGrouping<string, RaceResultRow>> groups = rows
+            // race_id でグルーピングする
+            List<IGrouping<string, RaceResultContractRow>> groups = rows
                 .GroupBy(r => r.RaceId, System.StringComparer.Ordinal)
                 .ToList();
 
             List<RaceJson> races = new List<RaceJson>();
 
-            foreach (IGrouping<string, RaceResultRow> g in groups)
+            foreach (IGrouping<string, RaceResultContractRow> g in groups)
             {
                 // レース共通情報は先頭行から採用する
-                RaceResultRow head = g.First();
+                RaceResultContractRow head = g.First();
 
                 // レースを構築する
                 RaceJson race = new RaceJson();
@@ -44,7 +44,7 @@ namespace ExportResults
 
                 race.Class = head.ClassName;
                 race.ClassSimple = head.ClassSimple;
-                race.Win5Target = head.Win5Target;
+                race.Win5Target = head.Win5Flg;
 
                 race.Weather = head.Weather;
                 race.Going = head.Going;
@@ -54,9 +54,10 @@ namespace ExportResults
                 // entries を構築する
                 List<EntryJson> entries = new List<EntryJson>();
 
-                foreach (RaceResultRow row in g)
+                foreach (RaceResultContractRow row in g)
                 {
                     EntryJson e = new EntryJson();
+
                     e.FrameNo = row.FrameNo;
                     e.HorseNo = row.HorseNo;
                     e.HorseId = row.HorseId;
@@ -71,13 +72,15 @@ namespace ExportResults
                     e.Time = row.Time;
                     e.BodyWeight = row.BodyWeight;
                     e.BodyWeightDiff = row.BodyWeightDiff;
+
+                    // VIEW算出の脚質ラベルをそのまま採用
                     e.RunningStyle = row.RunningStyle;
 
                     e.Passing = new PassingJson();
-                    e.Passing.Corner1 = row.Corner1;
-                    e.Passing.Corner2 = row.Corner2;
-                    e.Passing.Corner3 = row.Corner3;
-                    e.Passing.Corner4 = row.Corner4;
+                    e.Passing.Corner1 = ConvertNullableToZero(row.Corner1);
+                    e.Passing.Corner2 = ConvertNullableToZero(row.Corner2);
+                    e.Passing.Corner3 = ConvertNullableToZero(row.Corner3);
+                    e.Passing.Corner4 = ConvertNullableToZero(row.Corner4);
 
                     e.Last3f = row.Last3f;
 
@@ -91,7 +94,6 @@ namespace ExportResults
                     .ToList();
 
                 race.Entries = entries;
-
                 races.Add(race);
             }
 
@@ -114,6 +116,19 @@ namespace ExportResults
             }
 
             return finish.Value;
+        }
+
+        /// <summary>
+        /// passing の JSON は数値必須のため、NULLは0へ寄せます。
+        /// </summary>
+        private static int ConvertNullableToZero(int? value)
+        {
+            if (!value.HasValue)
+            {
+                return 0;
+            }
+
+            return value.Value;
         }
     }
 }
