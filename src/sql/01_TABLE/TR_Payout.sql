@@ -1,32 +1,21 @@
 CREATE TABLE dbo.TR_Payout (
-    -- 物理PK（自動採番）
     id INT IDENTITY(1,1) NOT NULL
         CONSTRAINT PK_TR_Payout PRIMARY KEY,
-
-    -- TR_raceresult と型を完全一致させる（CHAR(12)）
     race_id CHAR(12) NOT NULL,
-
-    -- 式別：'単勝' / '複勝' / '馬連' など
-    式別 NVARCHAR(20) NOT NULL,
-
-    -- 馬番（組み合わせに応じて使用）
-    馬番1 INT NULL,
-    馬番2 INT NULL,
-    馬番3 INT NULL,
-
-    -- 払戻金（円）
-    払戻金 INT NOT NULL,
-
-    -- 人気（1人気,2人気…）
-    人気 INT NULL
+    bet_type NVARCHAR(20) NOT NULL,     -- 式別
+    horse_no_1 INT NULL,                -- 馬番1 
+    horse_no_2 INT NULL,                -- 馬番2
+    horse_no_3 INT NULL,                -- 馬番3
+    payout_amount INT NOT NULL,         -- 払戻 
+    popularity    INT NULL              -- 式別人気
 );
 
-CREATE INDEX IX_Payout_Race_BetType
-    ON dbo.TR_Payout (race_id, 式別);
+CREATE INDEX IX_TR_Payout_Race_BetType
+    ON dbo.TR_Payout (race_id, bet_type);
 
-CREATE INDEX IX_Payout_Race_BetType_Horse
-    ON dbo.TR_Payout (race_id, 式別, 馬番1);
+CREATE INDEX IX_TR_Payout_Race_BetType_Horse1
+    ON dbo.TR_Payout (race_id, bet_type, horse_no_1);
 
 ALTER TABLE dbo.TR_Payout
-ADD CONSTRAINT UQ_Payout_Race_BetType_Horses
-    UNIQUE (race_id, 式別, 馬番1, 馬番2, 馬番3);
+ADD CONSTRAINT UQ_TR_Payout_Race_BetType_Horses
+    UNIQUE (race_id, bet_type, horse_no_1, horse_no_2, horse_no_3);

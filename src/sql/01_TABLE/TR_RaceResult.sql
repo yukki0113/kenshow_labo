@@ -3,46 +3,48 @@ drop table [TR_RaceResult]
 GO
  
 --* RestoreFromTempTable
-CREATE TABLE [TR_RaceResult] ( 
-  [race_id] CHAR(12) DEFAULT NULL
-  , [ì˙ït] DATE DEFAULT NULL
-  , [ÉåÅ[ÉXñº] NVARCHAR (50) DEFAULT NULL
-  , [ÉNÉâÉX] NVARCHAR (20) DEFAULT NULL
-  , [classSimple] NVARCHAR(10) DEFAULT NULL
-  , [WIN5_flg] TINYINT NOT NULL DEFAULT 0
-  , [èÍñº] NVARCHAR (3) DEFAULT NULL
-  , [é≈_É_Å[Ég] NVARCHAR (10) DEFAULT NULL
-  , [ãóó£] INT DEFAULT NULL
-  , [ògî‘] INT DEFAULT NULL
-  , [înî‘] INT DEFAULT NULL
-  , [horse_id] VARCHAR(20) NULL
-  , [înñº] NVARCHAR (30) DEFAULT NULL
-  , [ê´] NVARCHAR (1) DEFAULT NULL
-  , [óÓ] INT DEFAULT NULL
-  , [ãRéË] NVARCHAR (10) DEFAULT NULL
-  , [ã“ó ] DECIMAL(3, 1) DEFAULT NULL
-  , [êlãC] INT DEFAULT NULL
-  , [ÉIÉbÉY] DECIMAL(4, 1) DEFAULT NULL
-  , [íÖèá] INT DEFAULT NULL
-  , [ëñîjéûåv] TIME DEFAULT NULL
-  , [înëÃèd] INT DEFAULT NULL
-  , [înëÃèdïœìÆ] INT DEFAULT NULL
-  , [í âﬂèá_1äp] INT DEFAULT NULL
-  , [í âﬂèá_2äp] INT DEFAULT NULL
-  , [í âﬂèá_3äp] INT DEFAULT NULL
-  , [í âﬂèá_4äp] INT DEFAULT NULL
-  , [è„Ç™ÇË] DECIMAL(3, 1) DEFAULT NULL
-  , [äJç√] NVARCHAR (12) DEFAULT NULL
-  , [âÒÇË] NVARCHAR (1) DEFAULT NULL
-  , [înèÍ] NVARCHAR (1) DEFAULT NULL
-  , [ìVãC] NVARCHAR (1) DEFAULT NULL
-  , [track_id] NVARCHAR(2) DEFAULT NULL
-  , PRIMARY KEY (race_id, înî‘)
-)
+CREATE TABLE dbo.TR_RaceResult (
+    race_id          CHAR(12)      NOT NULL,
+    race_date        DATE          NULL,                -- Êó•‰ªò
+    race_name        NVARCHAR(50)  NULL,                -- „É¨„Éº„ÇπÂêç
+    race_class       NVARCHAR(20)  NULL,                -- „ÇØ„É©„Çπ
+    class_simple     NVARCHAR(10)  NULL,
+    win5_flg         TINYINT       NOT NULL DEFAULT 0,
+    track_name       NVARCHAR(3)   NULL,                -- Â†¥Âêç
+    surface_type     NVARCHAR(10)  NULL,                -- Ëäù_„ÉÄ„Éº„Éà
+    distance_m       INT           NULL,                -- Ë∑ùÈõ¢
+    frame_no         INT           NULL,                -- Êû†Áï™
+    horse_no         INT           NOT NULL,            -- È¶¨Áï™
+    horse_id         VARCHAR(20)   NULL, 
+    horse_name       NVARCHAR(30)  NULL,                -- È¶¨Âêç
+    sex              NVARCHAR(1)   NULL,                -- ÊÄß
+    age              INT           NULL,                -- ÈΩ¢
+    jockey_name      NVARCHAR(10)  NULL,                -- È®éÊâã
+    carried_weight   DECIMAL(3,1)  NULL,                -- Êñ§Èáè
+    popularity       INT           NULL,                -- ‰∫∫Ê∞ó
+    odds             DECIMAL(4,1)  NULL,                -- „Ç™„ÉÉ„Ç∫
+    finish_pos       INT           NULL,                -- ÁùÄÈ†Ü
+    finish_time      TIME          NULL,                -- Ëµ∞Á†¥ÊôÇË®à
+    horse_weight     INT           NULL,                -- È¶¨‰ΩìÈáç
+    horse_weight_diff INT          NULL,                -- È¶¨‰ΩìÈáçÂ¢óÊ∏õ
+    pos_corner1      INT           NULL,                -- ÈÄöÈÅéÈ†Ü_1Ëßí
+    pos_corner2      INT           NULL,                -- ÈÄöÈÅéÈ†Ü_2Ëßí
+    pos_corner3      INT           NULL,                -- ÈÄöÈÅéÈ†Ü_3Ëßí
+    pos_corner4      INT           NULL,                -- ÈÄöÈÅéÈ†Ü_4Ëßí
+    final_3f         DECIMAL(3,1)  NULL,                -- ‰∏ä„Åå„Çä
+    meeting          NVARCHAR(12)  NULL,                -- ÈñãÂÇ¨
+    turn             NVARCHAR(1)   NULL,                -- Âõû„Çä
+    going            NVARCHAR(1)   NULL,                -- È¶¨Â†¥
+    weather          NVARCHAR(1)   NULL,                -- Â§©Ê∞ó 
+    track_id         NVARCHAR(2)   NULL,
+
+    CONSTRAINT PK_TR_RaceResult PRIMARY KEY (race_id, horse_no)
+);
+
+CREATE INDEX IX_TR_RaceResult_HorseId
+    ON dbo.TR_RaceResult (horse_id);
+
+CREATE INDEX IX_TR_RaceResult_RaceDate
+    ON dbo.TR_RaceResult (race_date);
 GO
 
--- CREATE INDEX IX_TR_raceresult_înñº
--- ON TR_raceresult (înñº);
-
--- CREATE INDEX IX_TR_raceresult_horse_id
--- ON TR_raceresult (horse_id);
