@@ -26,7 +26,7 @@ namespace ExportResults
             Directory.CreateDirectory(indexDir);
 
             // DBからフラット行を取得する（TR_RaceResult 1行＝1頭）
-            List<RaceResultRow> rows = RaceResultRepository.FetchRows(options);
+            List<RaceResultContractRow> rows = RaceResultContractRepository.FetchRows(options);
 
             // 行を raceId 単位にまとめ、レース配列（entries付き）へ変換する
             List<RaceJson> races = RaceJsonBuilder.Build(rows);
