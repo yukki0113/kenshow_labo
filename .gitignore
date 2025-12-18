@@ -1,26 +1,11 @@
 # =========================
 # Secrets / Local configs
 # =========================
-
-# DB 接続情報（実物）はコミットしない
-src/scraping/dbconfig.json
-
 # もし .env などを使う場合はここに追加
 .env
 
-# C# 側で接続文字列などをローカル管理する場合（任意）
-src/csharp/**/appsettings.Development.json
-src/csharp/**/appsettings.local.json
-src/csharp/**/secrets.json
-
-# =========================
-# Python
-# =========================
-
-# Python bytecode cache
-__pycache__/
-*.pyc
-*.pyo
+# データ自体はコミットしない
+/local_data
 
 # =========================
 # C# / .NET (Visual Studio / VS Code)
