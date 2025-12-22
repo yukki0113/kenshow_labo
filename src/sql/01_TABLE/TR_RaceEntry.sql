@@ -2,6 +2,7 @@ CREATE TABLE dbo.TR_RaceEntry
 (
       id             INT IDENTITY(1,1)  NOT NULL
     , race_id        CHAR(12)           NOT NULL
+
     -- レース基本情報（TR_RaceResult に揃える）
     , race_date      DATE               NOT NULL
     , race_name      NVARCHAR(50)       NOT NULL
@@ -14,24 +15,36 @@ CREATE TABLE dbo.TR_RaceEntry
     , turn           NVARCHAR(1)        NULL      -- 右 / 左
     , going          NVARCHAR(1)        NULL      -- 良 / 重 等（想定で入れておく）
     , weather        NVARCHAR(1)        NULL
-    , track_id       INT                NULL      -- 既存のID体系を踏襲
+    , track_id       INT                NULL
+
     -- 出走馬情報（出馬表）
-    , frame_no       INT                NOT NULL
-    , horse_no       INT                NOT NULL
-    , horse_id       BIGINT             NULL      -- 取れれば入れる、なければ NULL
+    , frame_no       INT                NULL
+    , horse_no       INT                NULL
+
+    , horse_id       BIGINT             NOT NULL   -- JV基準に統一済み（TR以降はこちらが正）
     , horse_name     NVARCHAR(30)       NOT NULL
     , sex            NVARCHAR(1)        NULL
     , age            INT                NULL
     , jockey_name    NVARCHAR(10)       NULL
     , carried_weight DECIMAL(3,1)       NULL
+
     -- 管理用（任意）
-    , source_url     NVARCHAR(500)    NULL
-    , scraped_at     DATETIME2(0)     NOT NULL
+    , source_url     NVARCHAR(500)      NULL
+    , scraped_at     DATETIME2(0)       NOT NULL
                       CONSTRAINT DF_TR_RaceEntry_scraped_at DEFAULT (SYSDATETIME())
 
-    CONSTRAINT PK_TR_RaceEntry PRIMARY KEY (id)
+    , CONSTRAINT PK_TR_RaceEntry PRIMARY KEY (id)
 );
 
--- 1レース内で馬番は一意のはずなので、ユニーク制約を付けておくと安心です
-CREATE UNIQUE INDEX UX_TR_RaceEntry_race_id_umaban
-ON dbo.TR_RaceEntry (race_id, horse_no);
+-- 同一レースに同一馬が2頭以上はあり得ない前提を担保
+CREATE UNIQUE INDEX UX_TR_RaceEntry_race_id_horse_id
+ON dbo.TR_RaceEntry (race_id, horse_id);
+
+-- 馬番が入っている時だけ「同一レース内の馬番一意」を担保（任意だがオススメ）
+CREATE UNIQUE INDEX UX_TR_RaceEntry_race_id_horse_no
+ON dbo.TR_RaceEntry (race_id, horse_no)
+WHERE horse_no IS NOT NULL;
+
+-- race_id 参照が多いはずなので（任意）
+CREATE INDEX IX_TR_RaceEntry_race_id
+ON dbo.TR_RaceEntry (race_id);
