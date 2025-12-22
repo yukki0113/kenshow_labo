@@ -34,4 +34,4 @@ CREATE TABLE dbo.TR_RaceEntry
 
 -- 1レース内で馬番は一意のはずなので、ユニーク制約を付けておくと安心です
 CREATE UNIQUE INDEX UX_TR_RaceEntry_race_id_umaban
-ON dbo.TR_RaceEntry (race_id, 馬番);
+ON dbo.TR_RaceEntry (race_id, horse_no);
