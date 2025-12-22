@@ -99,6 +99,22 @@ namespace KenshowLabo.Tools.Db
         }
 
         /// <summary>
+        /// nullable int を取得します。NULLは null とみなします。(0は有効)
+        /// </summary>
+        public static int? ReadNullableIntAllowZero(SqlDataReader reader, string columnName)
+        {
+            int ordinal = reader.GetOrdinal(columnName);
+
+            if (reader.IsDBNull(ordinal))
+            {
+                return null;
+            }
+
+            int n = ReadInt(reader, columnName);
+            return n;
+        }
+
+        /// <summary>
         /// decimalを取得します（double/float/文字列でも吸収します）。
         /// </summary>
         public static decimal ReadDecimal(SqlDataReader reader, string columnName)

@@ -107,5 +107,111 @@ namespace KenshowLabo.Tools.Db
         {
             return SqlValueReader.ReadBool(reader, columnName);
         }
+        
+        /// <summary>
+        /// SQL Serverに接続し、非クエリ（INSERT/UPDATE/DELETE）を実行します。
+        /// </summary>
+        public static int ExecuteNonQuery(
+            string connectionString,
+            string sql,
+            Action<SqlParameterCollection>? addParameters)
+        {
+            int affectedRows = 0;
+
+            using (SqlConnection conn = new SqlConnection(connectionString))
+            {
+                conn.Open();
+
+                using (SqlCommand cmd = new SqlCommand(sql, conn))
+                {
+                    cmd.CommandType = CommandType.Text;
+
+                    if (addParameters != null)
+                    {
+                        addParameters(cmd.Parameters);
+                    }
+
+                    affectedRows = cmd.ExecuteNonQuery();
+                }
+            }
+
+            return affectedRows;
+        }
+
+        /// <summary>
+        /// SQL Serverに接続し、スカラー値を取得します（NULLの場合は default(T) を返します）。
+        /// </summary>
+        public static T? ExecuteScalar<T>(
+            string connectionString,
+            string sql,
+            Action<SqlParameterCollection>? addParameters)
+        {
+            object? result;
+
+            using (SqlConnection conn = new SqlConnection(connectionString))
+            {
+                conn.Open();
+
+                using (SqlCommand cmd = new SqlCommand(sql, conn))
+                {
+                    cmd.CommandType = CommandType.Text;
+
+                    if (addParameters != null)
+                    {
+                        addParameters(cmd.Parameters);
+                    }
+
+                    result = cmd.ExecuteScalar();
+                }
+            }
+
+            if (result == null)
+            {
+                return default(T);
+            }
+
+            if (result == DBNull.Value)
+            {
+                return default(T);
+            }
+
+            return (T)Convert.ChangeType(result, typeof(T));
+        }
+
+        /// <summary>
+        /// トランザクション内で処理を実行します（例：取込の一括INSERT/UPDATE）。
+        /// </summary>
+        public static void ExecuteInTransaction(
+            string connectionString,
+            Action<SqlConnection, SqlTransaction> action)
+        {
+            using (SqlConnection conn = new SqlConnection(connectionString))
+            {
+                conn.Open();
+
+                using (SqlTransaction tx = conn.BeginTransaction())
+                {
+                    try
+                    {
+                        action(conn, tx);
+
+                        tx.Commit();
+                    }
+                    catch
+                    {
+                        try
+                        {
+                            tx.Rollback();
+                        }
+                        catch
+                        {
+                            // rollback失敗は握りつぶし（原例外を優先）
+                        }
+
+                        throw;
+                    }
+                }
+            }
+        }
     }
 }
