@@ -1,77 +1,106 @@
 ﻿using System;
 
-namespace KenshowLabo.Tools.Models {
+namespace KenshowLabo.Tools.Models
+{
     /// <summary>
-    /// dbo.IF_RaceEntry の1行（1出走馬）を表す Row DTO です。
-    /// IFは「取込直近のパース済み生データ」を想定します。
+    /// dbo.IF_RaceEntry の1行（1出走馬）を表すDTOです。
     /// </summary>
-    public sealed class IfRaceEntryRow {
+    public sealed class IfRaceEntryRow
+    {
         // ----------------------------
-        // キー（現行DDLは (race_id, horse_no) だが horse_no NULL 許容ならPKにできないため注意）
+        // Key
         // ----------------------------
 
-        /// <summary>
-        /// race_id（CHAR(12)）
-        /// </summary>
-        public string RaceId { get; set; }
+        /// <summary>race_id（yyyyMMdd + 場CD(2) + R(2) の12桁）</summary>
+        public long RaceId { get; set; }
 
-        /// <summary>
-        /// 馬番（未確定なら null）
-        /// </summary>
-        public int? HorseNo { get; set; }
+        /// <summary>horse_id（現時点では netkeiba horse_id を格納。TR展開時にJVへ変換予定）</summary>
+        public long HorseId { get; set; }
 
-        /// <summary>
-        /// 枠番（未確定なら null）
-        /// </summary>
+        // ----------------------------
+        // Race
+        // ----------------------------
+
+        /// <summary>race_no（1～12）</summary>
+        public byte RaceNo { get; set; }
+
+        /// <summary>race_date</summary>
+        public DateTime RaceDate { get; set; }
+
+        /// <summary>race_name</summary>
+        public string RaceName { get; set; }
+
+        /// <summary>race_class</summary>
+        public string RaceClass { get; set; }
+
+        /// <summary>classSimple</summary>
+        public string ClassSimple { get; set; }
+
+        /// <summary>track_name（例：中山）</summary>
+        public string TrackName { get; set; }
+
+        /// <summary>surface_type（例：芝/ダ/障）</summary>
+        public string SurfaceType { get; set; }
+
+        /// <summary>distance_m</summary>
+        public int DistanceM { get; set; }
+
+        /// <summary>meeting</summary>
+        public string Meeting { get; set; }
+
+        /// <summary>turn（右/左）</summary>
+        public string Turn { get; set; }
+
+        /// <summary>course_inout（内/外。取れない場合は空）</summary>
+        public string CourseInOut { get; set; }
+
+        /// <summary>going（良/稍/重/不 等）</summary>
+        public string Going { get; set; }
+
+        /// <summary>weather</summary>
+        public string Weather { get; set; }
+
+        // ----------------------------
+        // Entry
+        // ----------------------------
+
+        /// <summary>frame_no（未確定は null）</summary>
         public int? FrameNo { get; set; }
 
-        // ----------------------------
-        // レース基本（取れない可能性を考え、NULL許容寄り）
-        // ----------------------------
+        /// <summary>horse_no（未確定は 101～118）</summary>
+        public int HorseNo { get; set; }
 
-        public DateTime? RaceDate { get; set; }
-        public string RaceName { get; set; }
-        public string RaceClass { get; set; }
-        public string ClassSimple { get; set; }
-        public string TrackName { get; set; }
-        public string SurfaceType { get; set; }
-        public int? DistanceM { get; set; }
-        public string Meeting { get; set; }
-        public string Turn { get; set; }
-        public string CourseInOut { get; set; }
-        public string Going { get; set; }
-        public string Weather { get; set; }
-        public int? TrackId { get; set; }
-
-        // ----------------------------
-        // 出走馬
-        // ----------------------------
-
-        /// <summary>
-        /// horse_id（IF段階では netkeiba由来が入る想定。JVに解決できるなら別工程で置換）
-        /// </summary>
-        public long? HorseId { get; set; }
-
+        /// <summary>horse_name</summary>
         public string HorseName { get; set; }
+
+        /// <summary>sex</summary>
         public string Sex { get; set; }
+
+        /// <summary>age</summary>
         public int? Age { get; set; }
+
+        /// <summary>jockey_name</summary>
         public string JockeyName { get; set; }
+
+        /// <summary>carried_weight</summary>
         public decimal? CarriedWeight { get; set; }
 
         // ----------------------------
-        // 管理
+        // Manage
         // ----------------------------
 
-        public string SourceUrl { get; set; }
+        /// <summary>scraped_at</summary>
         public DateTime ScrapedAt { get; set; }
 
-        /// <summary>
-        /// コンストラクタです（文字列は空文字に寄せます）。
-        /// </summary>
-        public IfRaceEntryRow() {
-            // 文字列は null を避け、空文字で初期化します
-            this.RaceId = string.Empty;
+        /// <summary>source_url</summary>
+        public string SourceUrl { get; set; }
 
+        /// <summary>
+        /// コンストラクタです（文字列は空文字で初期化）。
+        /// </summary>
+        public IfRaceEntryRow()
+        {
+            // 文字列はnullを避ける
             this.RaceName = string.Empty;
             this.RaceClass = string.Empty;
             this.ClassSimple = string.Empty;
@@ -89,7 +118,8 @@ namespace KenshowLabo.Tools.Models {
 
             this.SourceUrl = string.Empty;
 
-            // 日時はとりあえず最小値（投入前に上書き）
+            // 日付は投入前に必ず上書きされる前提
+            this.RaceDate = DateTime.MinValue;
             this.ScrapedAt = DateTime.MinValue;
         }
     }
