@@ -14,6 +14,7 @@ CREATE TABLE dbo.TR_RaceEntry
     , distance_m     INT               NOT NULL
     , meeting        NVARCHAR(12)      NULL
     , turn           NVARCHAR(1)       NULL
+    , course_inout   NVARCHAR(1)       NULL
     , going          NVARCHAR(1)       NULL
     , weather        NVARCHAR(1)       NULL
 

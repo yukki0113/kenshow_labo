@@ -38,6 +38,7 @@ namespace KenshowLabo.Tools.Models {
         public int? DistanceM { get; set; }
         public string Meeting { get; set; }
         public string Turn { get; set; }
+        public string CourseInOut { get; set; }
         public string Going { get; set; }
         public string Weather { get; set; }
         public int? TrackId { get; set; }
@@ -78,6 +79,7 @@ namespace KenshowLabo.Tools.Models {
             this.SurfaceType = string.Empty;
             this.Meeting = string.Empty;
             this.Turn = string.Empty;
+            this.CourseInOut = string.Empty;
             this.Going = string.Empty;
             this.Weather = string.Empty;
 

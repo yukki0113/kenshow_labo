@@ -27,6 +27,7 @@ WITH Base AS
 
         , e.meeting        AS [開催]
         , e.turn           AS [回り]
+        , e.course_inout   AS [内外]
         , e.going          AS [馬場]
         , e.weather        AS [天気]
     FROM dbo.TR_RaceEntry AS e
@@ -66,6 +67,7 @@ SELECT
 
     , b.[開催]
     , b.[回り]
+    , b.[内外]
     , b.[馬場]
     , b.[天気]
 
