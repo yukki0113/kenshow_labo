@@ -7,12 +7,14 @@ WITH Base AS
         , e.race_date      AS [日付]
         , e.race_name      AS [レース名]
         , e.race_class     AS [クラス]
-        , e.class_simple   AS classSimple
+        , e.classSimple    AS classSimple
         , e.track_name     AS [場名]
+        , e.race_no        AS [R]
         , e.surface_type   AS [芝_ダート]
         , e.distance_m     AS [距離]
         , e.frame_no       AS [枠番]
         , e.horse_no       AS [馬番]
+        , CASE WHEN e.horse_no BETWEEN 1 AND 18 THEN 1 ELSE 0 END AS [馬番確定フラグ]
         , e.horse_id
         , e.horse_name     AS [馬名]
         , e.sex            AS [性]
@@ -36,10 +38,12 @@ SELECT
     , b.[クラス]
     , b.classSimple
     , b.[場名]
+    , b.[R]
     , b.[芝_ダート]
     , b.[距離]
     , b.[枠番]
     , b.[馬番]
+    , b.[馬番確定フラグ]
     , b.horse_id
     , b.[馬名]
     , b.[性]
@@ -51,7 +55,7 @@ SELECT
     , CAST(NULL AS INT)           AS [人気]
     , CAST(NULL AS DECIMAL(4, 1)) AS [オッズ]
     , CAST(NULL AS INT)           AS [着順]
-    , CAST(NULL AS TIME)          AS [走破時計]
+    , CAST(NULL AS TIME(3))       AS [走破時計]
     , CAST(NULL AS INT)           AS [馬体重]
     , CAST(NULL AS INT)           AS [馬体重変動]
     , CAST(NULL AS INT)           AS [通過順_1角]
