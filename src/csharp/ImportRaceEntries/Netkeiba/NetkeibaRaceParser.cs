@@ -177,8 +177,9 @@ namespace ImportRaceEntries.Netkeiba {
                     provisionalNo++;
                 }
 
-                HtmlNode horseAnchor = GetHorseAnchor(tds, 4);
-                if (horseAnchor == null) {
+                HtmlNode? horseAnchor = GetHorseAnchor(tds, 4);
+                if (horseAnchor == null)
+                {
                     continue;
                 }
 
@@ -228,8 +229,9 @@ namespace ImportRaceEntries.Netkeiba {
                 int? frameNo = TryParseInt(GetCellText(tds, 2));
                 int horseNo = ParseRequiredInt(GetCellText(tds, 3), "horse_no");
 
-                HtmlNode horseAnchor = GetHorseAnchor(tds, 4);
-                if (horseAnchor == null) {
+                HtmlNode? horseAnchor = GetHorseAnchor(tds, 4);
+                if (horseAnchor == null)
+                {
                     continue;
                 }
 
@@ -287,13 +289,15 @@ namespace ImportRaceEntries.Netkeiba {
             return text.Trim();
         }
 
-        private static HtmlNode GetHorseAnchor(HtmlNodeCollection tds, int oneBasedIndex) {
+        private static HtmlNode? GetHorseAnchor(HtmlNodeCollection tds, int oneBasedIndex)
+        {
             int idx = oneBasedIndex - 1;
-            if (idx < 0 || idx >= tds.Count) {
+            if (idx < 0 || idx >= tds.Count)
+            {
                 return null;
             }
 
-            HtmlNode a = tds[idx].SelectSingleNode(".//a");
+            HtmlNode? a = tds[idx].SelectSingleNode(".//a");
             return a;
         }
 
