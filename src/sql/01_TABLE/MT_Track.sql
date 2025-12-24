@@ -1,3 +1,8 @@
+--* BackupToTempTable
+drop table [MT_Track]
+GO
+ 
+--* RestoreFromTempTable
 CREATE TABLE dbo.MT_Track
 (
       track_cd    CHAR(2)        NOT NULL
@@ -13,8 +18,8 @@ INSERT INTO dbo.MT_Track (track_cd, track_name) VALUES
 ,(N'02', N'函館')
 ,(N'03', N'福島')
 ,(N'04', N'新潟')
-,(N'05', N'中山')
-,(N'06', N'東京')
+,(N'05', N'東京')
+,(N'06', N'中山')
 ,(N'07', N'中京')
 ,(N'08', N'京都')
 ,(N'09', N'阪神')

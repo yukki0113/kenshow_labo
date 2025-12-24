@@ -1,7 +1,7 @@
 CREATE TABLE dbo.TR_RaceEntry
 (
       id             INT IDENTITY(1,1) NOT NULL
-    , race_id        BIGINT            NOT NULL  -- 例：202512210610（12桁）
+    , race_id        CHAR(12)          NOT NULL  -- 例：202512210610（12桁）
     , race_no        TINYINT           NOT NULL  -- 1～12(R)想定
 
     -- レース情報（出馬表時点で分かる範囲）

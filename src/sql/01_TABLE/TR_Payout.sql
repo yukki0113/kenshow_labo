@@ -1,3 +1,8 @@
+--* BackupToTempTable
+drop table [TR_Payout]
+GO
+
+--* RestoreFromTempTable
 CREATE TABLE dbo.TR_Payout (
     id INT IDENTITY(1,1) NOT NULL
         CONSTRAINT PK_TR_Payout PRIMARY KEY,
@@ -8,14 +13,18 @@ CREATE TABLE dbo.TR_Payout (
     horse_no_3 INT NULL,                -- 馬番3
     payout_amount INT NOT NULL,         -- 払戻 
     popularity    INT NULL              -- 式別人気
-);
+)
+GO
 
 CREATE INDEX IX_TR_Payout_Race_BetType
-    ON dbo.TR_Payout (race_id, bet_type);
+    ON dbo.TR_Payout (race_id, bet_type)
+GO
 
 CREATE INDEX IX_TR_Payout_Race_BetType_Horse1
-    ON dbo.TR_Payout (race_id, bet_type, horse_no_1);
+    ON dbo.TR_Payout (race_id, bet_type, horse_no_1)
+GO
 
 ALTER TABLE dbo.TR_Payout
 ADD CONSTRAINT UQ_TR_Payout_Race_BetType_Horses
-    UNIQUE (race_id, bet_type, horse_no_1, horse_no_2, horse_no_3);
+    UNIQUE (race_id, bet_type, horse_no_1, horse_no_2, horse_no_3)
+GO

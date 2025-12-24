@@ -1,6 +1,11 @@
+--* BackupToTempTable
+drop table [IF_RaceEntry]
+GO
+ 
+--* RestoreFromTempTable
 CREATE TABLE dbo.IF_RaceEntry
 (
-      race_id        BIGINT            NOT NULL
+      race_id        CHAR(12)          NOT NULL
     , horse_id       BIGINT            NOT NULL
 
     , race_no        TINYINT           NOT NULL
