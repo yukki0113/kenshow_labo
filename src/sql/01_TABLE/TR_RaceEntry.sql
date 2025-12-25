@@ -11,7 +11,7 @@ CREATE TABLE dbo.TR_RaceEntry
     , classSimple    NVARCHAR(20)      NULL
     , track_name     NVARCHAR(3)       NOT NULL
     , surface_type   NVARCHAR(10)      NOT NULL
-    , distance_m     INT               NOT NULL
+    , distance_m     SMALLINT          NOT NULL
     , meeting        NVARCHAR(12)      NULL
     , turn           NVARCHAR(1)       NULL
     , course_inout   NVARCHAR(1)       NULL
@@ -19,12 +19,12 @@ CREATE TABLE dbo.TR_RaceEntry
     , weather        NVARCHAR(1)       NULL
 
     -- 出走馬情報
-    , frame_no       INT               NULL      -- 未確定は NULL
-    , horse_no       INT               NOT NULL  -- 未確定は 101～（例：101～118）
-    , horse_id       BIGINT            NOT NULL
+    , frame_no       TINYINT           NULL      -- 未確定は NULL
+    , horse_no       TINYINT           NOT NULL  -- 未確定は 101～（例：101～）
+    , horse_id       CHAR(10)          NOT NULL
     , horse_name     NVARCHAR(30)      NOT NULL
     , sex            NVARCHAR(1)       NULL
-    , age            INT               NULL
+    , age            TINYINT           NULL
     , jockey_name    NVARCHAR(10)      NULL
     , carried_weight DECIMAL(3,1)      NULL
 

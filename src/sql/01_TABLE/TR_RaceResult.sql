@@ -6,10 +6,12 @@ GO
 CREATE TABLE dbo.TR_RaceResult (
     race_id            CHAR(12)      NOT NULL,
     race_date          DATE          NULL,                -- 日付
+    race_no            TINYINT       NULL,                -- R
     race_name          NVARCHAR(50)  NULL,                -- レース名
-    race_class         NVARCHAR(20)  NULL,                -- クラス
-    class_simple       NVARCHAR(10)  NULL,
+    race_class         NVARCHAR(20)  NULL,                -- クラス（性齢など条件付き）
+    class_simple       NVARCHAR(10)  NULL,                -- クラス（クラス名単体）
     win5_flg           TINYINT       NOT NULL DEFAULT 0,
+    jyo_cd             CHAR(2)       NULL,                -- 場CD
     track_name         NVARCHAR(3)   NULL,                -- 場名
     surface_type       NVARCHAR(10)  NULL,                -- 芝_ダート
     distance_m         smallint      NULL,                -- 距離
@@ -18,7 +20,7 @@ CREATE TABLE dbo.TR_RaceResult (
     horse_id           CHAR(10)      NULL, 
     horse_name         NVARCHAR(30)  NULL,                -- 馬名
     sex                NVARCHAR(1)   NULL,                -- 性
-    age                INT           NULL,                -- 齢
+    age                tinyint       NULL,                -- 齢
     jockey_name        NVARCHAR(10)  NULL,                -- 騎手
     carried_weight     DECIMAL(3,1)  NULL,                -- 斤量
     popularity         smallint      NULL,                -- 人気
@@ -36,7 +38,6 @@ CREATE TABLE dbo.TR_RaceResult (
     turn               NVARCHAR(1)   NULL,                -- 回り
     going              NVARCHAR(1)   NULL,                -- 馬場
     weather            NVARCHAR(1)   NULL,                -- 天気 
-    track_id           NVARCHAR(2)   NULL,
 
     CONSTRAINT PK_TR_RaceResult PRIMARY KEY (race_id, horse_no)
 );
@@ -48,3 +49,6 @@ CREATE INDEX IX_TR_RaceResult_RaceDate
     ON dbo.TR_RaceResult (race_date);
 GO
 
+CREATE INDEX IX_TR_RaceResult_Date_Jyo_RaceNo
+    ON dbo.TR_RaceResult (race_date, jyo_cd, race_no);
+GO
