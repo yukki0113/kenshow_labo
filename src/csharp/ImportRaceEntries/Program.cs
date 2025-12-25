@@ -13,7 +13,7 @@ namespace ImportRaceEntries {
 
             // 設定読込（appsettings.local.json）
             Microsoft.Extensions.Configuration.IConfigurationRoot config = AppConfigLoader.Load();
-            string connectionString = AppConfigLoader.GetConnectionString(config);
+            string connectionString = AppConfigLoader.GetSqlServerConnectionString(config);
 
             if (string.IsNullOrWhiteSpace(connectionString)) {
                 throw new ArgumentException("Db:ConnectionString is empty. appsettings.local.json を確認してください。");

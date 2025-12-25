@@ -5,6 +5,10 @@ using Microsoft.Data.SqlClient;
 
 namespace KenshowLabo.Tools.Db
 {
+    /// <summary>
+    /// SQL Server 実行の共通ユーティリティです。
+    /// ※責務は「SQL実行」「トランザクション」に限定します。
+    /// </summary>
     public static class DbUtil
     {
         /// <summary>
@@ -13,8 +17,9 @@ namespace KenshowLabo.Tools.Db
         public static List<T> QueryToList<T>(
             string connectionString,
             string sql,
-            Action<SqlParameterCollection>? addParameters,
-            Func<SqlDataReader, T> mapRow)
+            Action<SqlParameterCollection> addParameters,
+            Func<SqlDataReader, T> mapRow,
+            int commandTimeoutSeconds = 30)
         {
             // 結果格納
             List<T> list = new List<T>();
@@ -29,6 +34,9 @@ namespace KenshowLabo.Tools.Db
                 {
                     cmd.CommandType = CommandType.Text;
 
+                    // タイムアウト設定（重い集計・取込で必要になる）
+                    cmd.CommandTimeout = commandTimeoutSeconds;
+
                     // パラメータを追加する
                     if (addParameters != null)
                     {
@@ -40,6 +48,7 @@ namespace KenshowLabo.Tools.Db
                     {
                         while (reader.Read())
                         {
+                            // 1行 → 1要素に変換して追加する
                             T item = mapRow(reader);
                             list.Add(item);
                         }
@@ -51,86 +60,36 @@ namespace KenshowLabo.Tools.Db
         }
 
         /// <summary>
-        /// SqlParameter を作成します（よく使うので共通化）。
-        /// </summary>
-        public static SqlParameter CreateParameter(string name, SqlDbType type, object value)
-        {
-            SqlParameter p = new SqlParameter(name, type);
-            p.Value = value;
-            return p;
-        }
-
-        /// <summary>
-        /// SqlValueReader を外部から使えるように公開ラッパーを提供します。
-        /// </summary>
-        public static string ReadString(SqlDataReader reader, string columnName)
-        {
-            return SqlValueReader.ReadString(reader, columnName);
-        }
-
-        /// <summary>
-        /// SqlValueReader を外部から使えるように公開ラッパーを提供します。
-        /// </summary>
-        public static DateTime ReadDateTime(SqlDataReader reader, string columnName)
-        {
-            return SqlValueReader.ReadDateTime(reader, columnName);
-        }
-
-        /// <summary>
-        /// SqlValueReader を外部から使えるように公開ラッパーを提供します。
-        /// </summary>
-        public static int ReadInt(SqlDataReader reader, string columnName)
-        {
-            return SqlValueReader.ReadInt(reader, columnName);
-        }
-
-        /// <summary>
-        /// SqlValueReader を外部から使えるように公開ラッパーを提供します。
-        /// </summary>
-        public static int? ReadNullableInt(SqlDataReader reader, string columnName)
-        {
-            return SqlValueReader.ReadNullableInt(reader, columnName);
-        }
-
-        /// <summary>
-        /// SqlValueReader を外部から使えるように公開ラッパーを提供します。
-        /// </summary>
-        public static decimal ReadDecimal(SqlDataReader reader, string columnName)
-        {
-            return SqlValueReader.ReadDecimal(reader, columnName);
-        }
-
-        /// <summary>
-        /// SqlValueReader を外部から使えるように公開ラッパーを提供します。
-        /// </summary>
-        public static bool ReadBool(SqlDataReader reader, string columnName)
-        {
-            return SqlValueReader.ReadBool(reader, columnName);
-        }
-        
-        /// <summary>
         /// SQL Serverに接続し、非クエリ（INSERT/UPDATE/DELETE）を実行します。
         /// </summary>
         public static int ExecuteNonQuery(
             string connectionString,
             string sql,
-            Action<SqlParameterCollection>? addParameters)
+            Action<SqlParameterCollection> addParameters,
+            int commandTimeoutSeconds = 30)
         {
             int affectedRows = 0;
 
+            // 接続を開く
             using (SqlConnection conn = new SqlConnection(connectionString))
             {
                 conn.Open();
 
+                // コマンドを準備する
                 using (SqlCommand cmd = new SqlCommand(sql, conn))
                 {
                     cmd.CommandType = CommandType.Text;
 
+                    // タイムアウト設定
+                    cmd.CommandTimeout = commandTimeoutSeconds;
+
+                    // パラメータを追加する
                     if (addParameters != null)
                     {
                         addParameters(cmd.Parameters);
                     }
 
+                    // 実行
                     affectedRows = cmd.ExecuteNonQuery();
                 }
             }
@@ -139,43 +98,62 @@ namespace KenshowLabo.Tools.Db
         }
 
         /// <summary>
-        /// SQL Serverに接続し、スカラー値を取得します（NULLの場合は default(T) を返します）。
+        /// SQL Serverに接続し、スカラー値を取得します（DBNull/NULL の場合は default を返します）。
         /// </summary>
         public static T? ExecuteScalar<T>(
             string connectionString,
             string sql,
-            Action<SqlParameterCollection>? addParameters)
+            Action<SqlParameterCollection> addParameters,
+            int commandTimeoutSeconds = 30)
         {
-            object? result;
+            object result;
 
+            // 接続を開く
             using (SqlConnection conn = new SqlConnection(connectionString))
             {
                 conn.Open();
 
+                // コマンドを準備する
                 using (SqlCommand cmd = new SqlCommand(sql, conn))
                 {
                     cmd.CommandType = CommandType.Text;
 
+                    // タイムアウト設定
+                    cmd.CommandTimeout = commandTimeoutSeconds;
+
+                    // パラメータを追加する
                     if (addParameters != null)
                     {
                         addParameters(cmd.Parameters);
                     }
 
+                    // 実行
                     result = cmd.ExecuteScalar();
                 }
             }
 
-            if (result == null)
+            // NULL/DBNull の場合
+            if (result == null || result == DBNull.Value)
             {
                 return default(T);
             }
 
-            if (result == DBNull.Value)
+            // 既に型が一致している場合はそのまま返す
+            if (result is T)
             {
-                return default(T);
+                return (T)result;
             }
 
-            return (T)Convert.ChangeType(result, typeof(T));
+            // Nullable<T> を考慮して変換する
+            Type targetType = typeof(T);
+            Type? underlyingType = Nullable.GetUnderlyingType(targetType);
+            if (underlyingType != null)
+            {
+                targetType = underlyingType;
+            }
+
+            object converted = Convert.ChangeType(result, targetType);
+            return (T)converted;
         }
 
         /// <summary>
@@ -185,33 +163,58 @@ namespace KenshowLabo.Tools.Db
             string connectionString,
             Action<SqlConnection, SqlTransaction> action)
         {
+            // 接続を開く
             using (SqlConnection conn = new SqlConnection(connectionString))
             {
                 conn.Open();
 
+                // トランザクション開始
                 using (SqlTransaction tx = conn.BeginTransaction())
                 {
                     try
                     {
+                        // 呼び出し側処理を実行
                         action(conn, tx);
 
+                        // コミット
                         tx.Commit();
                     }
                     catch
                     {
+                        // ロールバック（失敗しても原例外を優先）
                         try
                         {
                             tx.Rollback();
                         }
                         catch
                         {
-                            // rollback失敗は握りつぶし（原例外を優先）
+                            // rollback失敗は握りつぶし
                         }
 
                         throw;
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// SqlParameter を作成します（NULL は DBNull.Value に置換します）。
+        /// </summary>
+        public static SqlParameter CreateParameter(string name, SqlDbType type, object value)
+        {
+            SqlParameter p = new SqlParameter(name, type);
+
+            // NULL をそのまま渡すと例外や意図しない挙動になりやすいため変換する
+            if (value == null)
+            {
+                p.Value = DBNull.Value;
+            }
+            else
+            {
+                p.Value = value;
+            }
+
+            return p;
         }
     }
 }

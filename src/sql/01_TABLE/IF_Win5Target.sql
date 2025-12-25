@@ -1,5 +1,5 @@
 --* BackupToTempTable
-drop table [IF_JV_Race]
+drop table [IF_JV_Win5Target]
 GO
  
 --* RestoreFromTempTable

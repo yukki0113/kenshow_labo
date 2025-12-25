@@ -1,9 +1,9 @@
 --* BackupToTempTable
-drop table [IF_HR_Pay_WinPlace]
+drop table [IF_JV_PAY]
 GO
  
 --* RestoreFromTempTable
-create table [dbo].[IF_HR_Pay_WinPlace] (
+create table [dbo].[IF_JV_PAY] (
   [race_id] char(12) not null
   , [data_kubun] char(1)
   , [make_date] char(8)
@@ -33,3 +33,4 @@ create table [dbo].[IF_HR_Pay_WinPlace] (
   , [fukusyo4_ninki] int
   , primary key (race_id)
 );
+

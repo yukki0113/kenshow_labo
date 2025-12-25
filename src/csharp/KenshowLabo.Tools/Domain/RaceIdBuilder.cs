@@ -1,38 +1,33 @@
 ﻿using System;
-using System.Globalization;
 
-namespace KenshowLabo.Tools.Domain {
+namespace KenshowLabo.Tools.Domain
+{
     /// <summary>
-    /// JV準拠の race_id（yyyyMMdd + 場CD(2) + R(2)）を生成します。
+    /// race_id（12桁）を生成します。
+    /// race_id = yyyymmdd(8) + jyo_cd(2) + race_num(2)
     /// </summary>
-    public static class RaceIdBuilder {
+    public static class RaceIdBuilder
+    {
         /// <summary>
-        /// race_id（12桁）を生成します。
+        /// race_id を生成します。
         /// </summary>
-        public static long Build(DateTime raceDate, string trackCd, int raceNo) {
-            if (string.IsNullOrWhiteSpace(trackCd)) {
-                throw new ArgumentException("trackCd is empty.");
+        public static string Build(string ymd, string jyoCd, int raceNum)
+        {
+            // ymd: yyyyMMdd を想定（仕様でC#側でも必ず埋める）
+            if (string.IsNullOrWhiteSpace(ymd) || ymd.Length != 8)
+            {
+                throw new ArgumentException("ymd must be yyyyMMdd. ymd=" + ymd);
             }
 
-            if (trackCd.Length != 2) {
-                throw new ArgumentException("trackCd must be 2 chars.");
+            if (string.IsNullOrWhiteSpace(jyoCd) || jyoCd.Length != 2)
+            {
+                throw new ArgumentException("jyo_cd must be 2 chars. jyo_cd=" + jyoCd);
             }
 
-            if (raceNo < 1 || raceNo > 12) {
-                throw new ArgumentOutOfRangeException(nameof(raceNo), "raceNo must be 1..12.");
-            }
+            // race_num は2桁ゼロ埋め必須
+            string raceNum2 = raceNum.ToString("00");
 
-            string ymd = raceDate.ToString("yyyyMMdd", CultureInfo.InvariantCulture);
-            string r2 = raceNo.ToString("00", CultureInfo.InvariantCulture);
-
-            string s = ymd + trackCd + r2;
-
-            long id;
-            if (!long.TryParse(s, NumberStyles.None, CultureInfo.InvariantCulture, out id)) {
-                throw new InvalidOperationException("race_id の生成に失敗しました: " + s);
-            }
-
-            return id;
+            return ymd + jyoCd + raceNum2;
         }
     }
 }
