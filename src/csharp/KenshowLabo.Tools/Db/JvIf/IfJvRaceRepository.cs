@@ -72,6 +72,8 @@ namespace KenshowLabo.Tools.Db.JvIf
                 bulk.ColumnMappings.Add("weather_cd", "weather_cd");
                 bulk.ColumnMappings.Add("baba_siba_cd", "baba_siba_cd");
                 bulk.ColumnMappings.Add("baba_dirt_cd", "baba_dirt_cd");
+                bulk.ColumnMappings.Add("jyoken_syubetu_cd", "jyoken_syubetu_cd");
+                bulk.ColumnMappings.Add("jyoken_cd4", "jyoken_cd4");
 
                 // 一括投入
                 bulk.WriteToServer(table);
@@ -103,6 +105,8 @@ namespace KenshowLabo.Tools.Db.JvIf
             table.Columns.Add("weather_cd", typeof(string));
             table.Columns.Add("baba_siba_cd", typeof(string));
             table.Columns.Add("baba_dirt_cd", typeof(string));
+            table.Columns.Add("jyoken_syubetu_cd", typeof(string));
+            table.Columns.Add("jyoken_cd4", typeof(string));
 
             // 行を詰める
             foreach (IfJvRaceRow r in rows)
@@ -130,6 +134,9 @@ namespace KenshowLabo.Tools.Db.JvIf
                 row["weather_cd"] = ToDbNull(r.WeatherCd);
                 row["baba_siba_cd"] = ToDbNull(r.BabaSibaCd);
                 row["baba_dirt_cd"] = ToDbNull(r.BabaDirtCd);
+
+                row["jyoken_syubetu_cd"] = ToDbNull(r.JyokenSyubetuCd);
+                row["jyoken_cd4"] = ToDbNull(r.JyokenCd4);
 
                 table.Rows.Add(row);
             }

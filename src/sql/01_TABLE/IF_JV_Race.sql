@@ -18,6 +18,8 @@ CREATE TABLE dbo.IF_JV_Race (
     race_name      NVARCHAR(50)  NULL,      -- RaceInfoHondai 等から
     jyoken_name    NVARCHAR(50)  NULL,      -- JyokenName（クラス/条件のベース）
     grade_cd       CHAR(2)       NULL,      -- GradeCD（必要なら）
+    jyoken_syubetu_cd NVARCHAR(10) NULL,    -- JyokenInfoSyubetuCD（年齢条件など）
+    jyoken_cd4        NVARCHAR(10) NULL;    -- JyokenInfoJyokenCD4（クラス/賞金条件など）
     track_cd       CHAR(2)       NULL,      -- TrackCD（芝/ダ/障害や内外などは後で変換）
     distance_m     INT           NULL,      -- Kyori
 

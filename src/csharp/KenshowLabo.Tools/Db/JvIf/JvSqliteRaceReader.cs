@@ -43,6 +43,7 @@ namespace KenshowLabo.Tools.Db.JvIf
                         " idYear, idMonthDay, idJyoCD, idKaiji, idNichiji, idRaceNum, " +
                         " RaceInfoHondai, JyokenName, GradeCD, TrackCD, Kyori, " +
                         " HassoTime, TenkoBabaTenkoCD, TenkoBabaSibaBabaCD, TenkoBabaDirtBabaCD " +
+                        " JyokenInfoSyubetuCD, JyokenInfoJyokenCD4" +
                         "FROM NL_RA_RACE " +
                         "WHERE (idYear || idMonthDay) BETWEEN @fromYmd AND @toYmd;";
 

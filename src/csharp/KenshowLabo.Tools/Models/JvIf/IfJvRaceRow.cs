@@ -28,5 +28,8 @@ namespace KenshowLabo.Tools.Models.JvIf
         public string? WeatherCd { get; set; }
         public string? BabaSibaCd { get; set; }
         public string? BabaDirtCd { get; set; }
+        public string? JyokenSyubetuCd { get; set; }
+        public string? JyokenCd4 { get; set; }
+
     }
 }
