@@ -42,8 +42,8 @@ namespace KenshowLabo.Tools.Db.JvIf
                         " headDataKubun, headMakeDate, " +
                         " idYear, idMonthDay, idJyoCD, idKaiji, idNichiji, idRaceNum, " +
                         " RaceInfoHondai, JyokenName, GradeCD, TrackCD, Kyori, " +
-                        " HassoTime, TenkoBabaTenkoCD, TenkoBabaSibaBabaCD, TenkoBabaDirtBabaCD " +
-                        " JyokenInfoSyubetuCD, JyokenInfoJyokenCD4" +
+                        " HassoTime, TenkoBabaTenkoCD, TenkoBabaSibaBabaCD, TenkoBabaDirtBabaCD, " +
+                        " JyokenInfoSyubetuCD, JyokenInfoJyokenCD4 " +
                         "FROM NL_RA_RACE " +
                         "WHERE (idYear || idMonthDay) BETWEEN @fromYmd AND @toYmd;";
 
@@ -100,6 +100,9 @@ namespace KenshowLabo.Tools.Db.JvIf
                             row.WeatherCd = TrimToLength(ReadText(reader, "TenkoBabaTenkoCD"), 1);
                             row.BabaSibaCd = TrimToLength(ReadText(reader, "TenkoBabaSibaBabaCD"), 1);
                             row.BabaDirtCd = TrimToLength(ReadText(reader, "TenkoBabaDirtBabaCD"), 1);
+
+                            row.JyokenSyubetuCd = TrimToLength(ReadText(reader, "JyokenInfoSyubetuCD"), 10);
+                            row.JyokenCd4 = TrimToLength(ReadText(reader, "JyokenInfoJyokenCD4"), 10);
 
                             list.Add(row);
                         }
