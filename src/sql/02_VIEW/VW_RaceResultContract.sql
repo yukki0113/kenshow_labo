@@ -58,6 +58,16 @@ SELECT
     , b.win5_flg                             AS WIN5_flg
 
     , dcourse.[text]                         AS [場名]
+    , CASE
+        WHEN b.baba_siba_cd IS NOT NULL
+        AND b.baba_siba_cd <> N'0'
+            THEN '芝'
+        WHEN b.baba_dirt_cd IS NOT NULL
+        AND b.baba_dirt_cd <> N'0'
+            THEN 'ダ'
+        ELSE
+            NULL
+    END AS [芝/ダ]
     , CAST(b.distance_m AS SMALLINT)         AS [距離]
 
     , b.frame_no                             AS [枠番]
@@ -85,8 +95,16 @@ SELECT
     , b.final_3f                             AS [上がり]
 
     , dweather.[text]                        AS [天気]
-    , COALESCE(db_siba.[text], db_dirt.[text]) AS [馬場]
-
+    , CASE
+        WHEN b.baba_siba_cd IS NOT NULL
+        AND b.baba_siba_cd <> N'0'
+            THEN db_siba.[text]
+        WHEN b.baba_dirt_cd IS NOT NULL
+        AND b.baba_dirt_cd <> N'0'
+            THEN db_dirt.[text]
+        ELSE
+            NULL
+    END AS [馬場]
     , p.horse_name                           AS [血統馬名]
     , p.sire                                 AS [父]
     , p.dam                                  AS [母]
