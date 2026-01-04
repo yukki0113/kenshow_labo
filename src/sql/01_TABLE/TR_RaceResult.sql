@@ -61,6 +61,7 @@ CREATE TABLE dbo.TR_RaceResult (
     pos_c3          TINYINT      NULL,       -- コーナー通過順_3
     pos_c4          TINYINT      NULL,       -- コーナー通過順_4
 
+    finish_pos      TINYINT      NULL,       -- 着順
     final_3f_raw    NVARCHAR(8)  NULL,       -- 上がり3F（文字）
     final_3f        DECIMAL(3,1) NULL,       -- 上がり3F
 

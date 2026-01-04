@@ -3,41 +3,26 @@ AS
 BEGIN
     SET NOCOUNT ON
 
-    /* 事前チェック：UmaにあるのにRaceが無い（ヘッダ欠落） */
-    IF EXISTS (
-        SELECT 1
-        FROM dbo.IF_JV_RaceUma AS u
-        LEFT JOIN dbo.IF_JV_Race AS r
-            ON r.race_id = u.race_id
-        WHERE r.race_id IS NULL
-    )
-    BEGIN
-        RAISERROR(N'IF_JV_RaceUma に存在する race_id が IF_JV_Race に存在しません（ヘッダ欠落）。', 16, 1)
-        RETURN
-    END
+    /* 対象 race_id：IF_JV_Race と IF_JV_RaceUma の共通部分のみ */
+    IF OBJECT_ID('tempdb..#TargetRace') IS NOT NULL
+        DROP TABLE #TargetRace
 
-    /* 事前チェック：RaceにあるのにUmaが無い（馬行欠落） */
-    IF EXISTS (
-        SELECT 1
-        FROM dbo.IF_JV_Race AS r
-        LEFT JOIN dbo.IF_JV_RaceUma AS u
-            ON u.race_id = r.race_id
-        WHERE u.race_id IS NULL
-    )
-    BEGIN
-        RAISERROR(N'IF_JV_Race に存在する race_id に対して IF_JV_RaceUma が0件です（馬行欠落）。', 16, 1)
-        RETURN
-    END
+    SELECT DISTINCT r.race_id
+    INTO #TargetRace
+    FROM dbo.IF_JV_Race AS r
+    INNER JOIN dbo.IF_JV_RaceUma AS u
+        ON u.race_id = r.race_id
 
     BEGIN TRY
         BEGIN TRAN
 
-        /* 冪等：IF_JV_Race に入っている race_id を入れ直す */
+        /* 冪等：対象 race_id の結果を入れ直す */
         DELETE t
         FROM dbo.TR_RaceResult AS t
-        INNER JOIN dbo.IF_JV_Race AS r
-            ON r.race_id = t.race_id
+        INNER JOIN #TargetRace AS x
+            ON x.race_id = t.race_id
 
+        /* INSERT：ヘッダ×馬（WIN5はMT参照でフラグ化） */
         INSERT INTO dbo.TR_RaceResult
         (
               race_id
@@ -88,6 +73,7 @@ BEGIN
             , pos_c3
             , pos_c4
 
+            , finish_pos
             , final_3f_raw
             , final_3f
         )
@@ -127,22 +113,37 @@ BEGIN
             , u.popularity
 
             , u.finish_time_raw
-            , TRY_CONVERT(
-                  TIME(2),
-                  CASE
-                      WHEN u.finish_time_raw IS NULL THEN NULL
-                      WHEN CHARINDEX(':', u.finish_time_raw) > 0 THEN
-                          CONCAT(
-                              '00:',
-                              RIGHT('00' + LEFT(u.finish_time_raw, CHARINDEX(':', u.finish_time_raw) - 1), 2),
-                              ':',
-                              SUBSTRING(u.finish_time_raw, CHARINDEX(':', u.finish_time_raw) + 1, 100)
-                          )
-                      ELSE
-                          CONCAT('00:00:', u.finish_time_raw)
-                  END
-              ) AS finish_time
+            , CASE
+                WHEN NULLIF(LTRIM(RTRIM(u.finish_time_raw)), N'') IS NULL
+                    THEN NULL
 
+                /* 数字だけ（例：1132, 2011）を想定：分(可変) + 秒(2桁) + 1/10秒(1桁) */
+                WHEN TRY_CONVERT(INT, LTRIM(RTRIM(u.finish_time_raw))) IS NOT NULL
+                    AND LEN(LTRIM(RTRIM(u.finish_time_raw))) >= 3
+                    THEN
+                        TRY_CONVERT(
+                            TIME(2),
+                            CONCAT(
+                                N'00:',
+                                RIGHT(
+                                    N'00' + CASE
+                                                WHEN LEN(LTRIM(RTRIM(u.finish_time_raw))) > 3
+                                                    THEN LEFT(LTRIM(RTRIM(u.finish_time_raw)), LEN(LTRIM(RTRIM(u.finish_time_raw))) - 3)
+                                                ELSE N'0'
+                                            END,
+                                    2
+                                ),
+                                N':',
+                                SUBSTRING(LTRIM(RTRIM(u.finish_time_raw)), LEN(LTRIM(RTRIM(u.finish_time_raw))) - 2, 2),
+                                N'.',
+                                RIGHT(LTRIM(RTRIM(u.finish_time_raw)), 1),
+                                N'0'
+                            )
+                        )
+
+                /* それ以外の形式は一旦 NULL（必要なら後で対応追加） */
+                ELSE NULL
+            END AS finish_time
             , u.weight_raw
             , TRY_CONVERT(SMALLINT, NULLIF(LTRIM(RTRIM(u.weight_raw)), N'')) AS horse_weight
 
@@ -153,12 +154,24 @@ BEGIN
             , u.pos_c2
             , u.pos_c3
             , u.pos_c4
-
+            
+            , u.finish_pos
             , u.final_3f_raw
-            , TRY_CONVERT(DECIMAL(3,1), NULLIF(LTRIM(RTRIM(u.final_3f_raw)), N'')) AS final_3f
-        FROM dbo.IF_JV_RaceUma AS u
+            , CASE
+                WHEN NULLIF(LTRIM(RTRIM(u.final_3f_raw)), N'') IS NULL
+                    THEN NULL
+                WHEN LTRIM(RTRIM(u.final_3f_raw)) LIKE N'%.%'
+                    THEN TRY_CONVERT(DECIMAL(3,1), LTRIM(RTRIM(u.final_3f_raw)))
+                WHEN TRY_CONVERT(INT, LTRIM(RTRIM(u.final_3f_raw))) IS NULL
+                    THEN NULL
+                ELSE
+                    CAST(TRY_CONVERT(INT, LTRIM(RTRIM(u.final_3f_raw))) / 10.0 AS DECIMAL(3,1))
+                END AS final_3f
+          FROM dbo.IF_JV_RaceUma AS u
         INNER JOIN dbo.IF_JV_Race AS r
             ON r.race_id = u.race_id
+        INNER JOIN #TargetRace AS x
+            ON x.race_id = r.race_id
         LEFT JOIN dbo.MT_Win5Target AS w
             ON w.race_id = r.race_id
 
