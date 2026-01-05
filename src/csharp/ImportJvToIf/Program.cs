@@ -1,4 +1,5 @@
 ﻿using KenshowLabo.Tools.Config;
+using KenshowLabo.Tools.Db;
 using KenshowLabo.Tools.Domain;
 using KenshowLabo.Tools.Domain.JvIf;
 using Microsoft.Extensions.Configuration;
@@ -18,6 +19,7 @@ namespace ImportJvToIf
             int fromYear = ReadIntOrDefault(config, "Import:FromYear", 2016);
             int toYear = ReadIntOrDefault(config, "Import:ToYear", DateTime.Now.Year);
 
+            // 1) SQLite → IF
             JvRaceToIfImportService service = new JvRaceToIfImportService(sqlServerCs, sqliteCs);
             service.ImportByYearRange(fromYear, toYear);
 
@@ -32,6 +34,19 @@ namespace ImportJvToIf
 
             JvHorsePedigreeToIfImportService pedService = new JvHorsePedigreeToIfImportService(sqlServerCs, sqliteCs);
             pedService.ImportMissing(batchSize: 1000);
+
+
+            // 2) IF → TR/MT 展開（追加）
+            Console.WriteLine("[EXPAND] start dbo.usp_JV_Expand_All");
+
+            // タイムアウトは無制限(0)推奨。必要なら 600 などでもOKです。
+            DbUtil.ExecuteStoredProcedure(
+                sqlServerCs,
+                "dbo.usp_JV_Expand_All",
+                null,
+                commandTimeoutSeconds: 0);
+
+            Console.WriteLine("[EXPAND] end dbo.usp_JV_Expand_All");
 
             return 0;
         }

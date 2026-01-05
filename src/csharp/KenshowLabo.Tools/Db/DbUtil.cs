@@ -216,5 +216,41 @@ namespace KenshowLabo.Tools.Db
 
             return p;
         }
+
+        /// <summary>
+        /// SQL Serverのストアドプロシージャを実行します（戻り値は影響行数）。
+        /// </summary>
+        public static int ExecuteStoredProcedure(
+            string connectionString,
+            string storedProcedureName,
+            Action<SqlParameterCollection>? addParameters,
+            int commandTimeoutSeconds = 0) // 0 = 無制限（重い展開向け）
+        {
+            int affectedRows = 0;
+
+            using (SqlConnection conn = new SqlConnection(connectionString))
+            {
+                conn.Open();
+
+                using (SqlCommand cmd = new SqlCommand(storedProcedureName, conn))
+                {
+                    // ストアド実行
+                    cmd.CommandType = CommandType.StoredProcedure;
+
+                    // タイムアウト（展開は長い可能性があるので無制限推奨）
+                    cmd.CommandTimeout = commandTimeoutSeconds;
+
+                    // パラメータがあれば追加（今回はNULLでOK）
+                    if (addParameters != null)
+                    {
+                        addParameters(cmd.Parameters);
+                    }
+
+                    affectedRows = cmd.ExecuteNonQuery();
+                }
+            }
+
+            return affectedRows;
+        }
     }
 }
