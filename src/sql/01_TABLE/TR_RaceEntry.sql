@@ -1,3 +1,8 @@
+--* BackupToTempTable
+drop table [TR_RaceEntry]
+GO
+ 
+--* RestoreFromTempTable
 CREATE TABLE dbo.TR_RaceEntry
 (
       id             INT IDENTITY(1,1) NOT NULL
@@ -8,7 +13,6 @@ CREATE TABLE dbo.TR_RaceEntry
     , race_date      DATE              NOT NULL
     , race_name      NVARCHAR(50)      NOT NULL
     , race_class     NVARCHAR(20)      NULL
-    , classSimple    NVARCHAR(20)      NULL
     , track_name     NVARCHAR(3)       NOT NULL
     , surface_type   NVARCHAR(10)      NOT NULL
     , distance_m     SMALLINT          NOT NULL
