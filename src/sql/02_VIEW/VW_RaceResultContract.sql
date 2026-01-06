@@ -57,18 +57,22 @@ SELECT
     , dgrade.[text]                          AS [グレード]
     , b.win5_flg                             AS WIN5_flg
 
-    , dcourse.[text]                         AS [場名]
-    , CASE
-        WHEN b.baba_siba_cd IS NOT NULL
-        AND b.baba_siba_cd <> N'0'
-            THEN '芝'
-        WHEN b.baba_dirt_cd IS NOT NULL
-        AND b.baba_dirt_cd <> N'0'
-            THEN 'ダ'
-        ELSE
-            NULL
-    END AS [芝/ダ]
+    -- 表示系：VW_Track を優先（引けない場合だけフォールバック）
+    , COALESCE(vt.[場名], dcourse.[text])    AS [場名]
+
+    , COALESCE(
+          vt.[芝ダ],
+          CASE
+              WHEN b.baba_siba_cd IS NOT NULL AND b.baba_siba_cd <> N'0' THEN N'芝'
+              WHEN b.baba_dirt_cd IS NOT NULL AND b.baba_dirt_cd <> N'0' THEN N'ダ'
+              ELSE NULL
+          END
+      ) AS [芝/ダ]
+
     , CAST(b.distance_m AS SMALLINT)         AS [距離]
+
+    , vt.[回り]                              AS [回り]
+    , vt.[内外]                              AS [内外]
 
     , b.frame_no                             AS [枠番]
     , b.horse_no                             AS [馬番]
@@ -97,14 +101,15 @@ SELECT
     , dweather.[text]                        AS [天気]
     , CASE
         WHEN b.baba_siba_cd IS NOT NULL
-        AND b.baba_siba_cd <> N'0'
+         AND b.baba_siba_cd <> N'0'
             THEN db_siba.[text]
         WHEN b.baba_dirt_cd IS NOT NULL
-        AND b.baba_dirt_cd <> N'0'
+         AND b.baba_dirt_cd <> N'0'
             THEN db_dirt.[text]
         ELSE
             NULL
-    END AS [馬場]
+      END AS [馬場]
+
     , p.horse_name                           AS [血統馬名]
     , p.sire                                 AS [父]
     , p.dam                                  AS [母]
@@ -152,6 +157,13 @@ FROM Base AS b
 LEFT JOIN dbo.MT_HorsePedigree AS p
     ON b.horse_id = p.horse_id
 
+-- ★追加：VW_Track（表示名と回り/内外を取得）
+LEFT JOIN dbo.VW_Track AS vt
+    ON  vt.JyoCD   = b.jyo_cd
+    AND vt.Kyori   = b.distance_m
+    AND vt.TrackCD = b.track_cd
+
+-- フィルタ用途（CENTRAL / OVERSEAS）
 LEFT JOIN dbo.MT_CodeDictionary AS dcourse
     ON dcourse.code_type = N'RACE_COURSE'
    AND dcourse.code      = b.jyo_cd
@@ -202,5 +214,5 @@ LEFT JOIN dbo.TR_Payout AS fp
     AND b.horse_no  = fp.horse_no_1
     AND fp.bet_type = N'複勝'
 WHERE
-    dcourse.text_sub IN (N'CENTRAL', N'OVERSEAS')
+    dcourse.text_sub IN (N'CENTRAL', N'OVERSEAS');
 GO
