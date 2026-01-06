@@ -198,6 +198,164 @@ namespace KenshowLabo.Tools.Db
         }
 
         /// <summary>
+        /// 既存の接続・トランザクション内で非クエリ（INSERT/UPDATE/DELETE）を実行します。
+        /// </summary>
+        public static int ExecuteNonQuery(
+            SqlConnection conn,
+            SqlTransaction tx,
+            string sql,
+            Action<SqlParameterCollection> addParameters,
+            int commandTimeoutSeconds = 30) {
+            int affectedRows = 0;
+
+            // 入力チェック
+            if (conn == null) {
+                throw new ArgumentNullException(nameof(conn));
+            }
+
+            if (tx == null) {
+                throw new ArgumentNullException(nameof(tx));
+            }
+
+            if (string.IsNullOrWhiteSpace(sql)) {
+                throw new ArgumentException("sql is null or empty.", nameof(sql));
+            }
+
+            // コマンドを準備する（トランザクションに紐づける）
+            using (SqlCommand cmd = new SqlCommand(sql, conn, tx)) {
+                cmd.CommandType = CommandType.Text;
+
+                // タイムアウト設定
+                cmd.CommandTimeout = commandTimeoutSeconds;
+
+                // パラメータを追加する
+                if (addParameters != null) {
+                    addParameters(cmd.Parameters);
+                }
+
+                // 実行
+                affectedRows = cmd.ExecuteNonQuery();
+            }
+
+            return affectedRows;
+        }
+
+        /// <summary>
+        /// 既存の接続・トランザクション内でスカラー値を取得します（DBNull/NULL の場合は default を返します）。
+        /// </summary>
+        public static T? ExecuteScalar<T>(
+            SqlConnection conn,
+            SqlTransaction tx,
+            string sql,
+            Action<SqlParameterCollection> addParameters,
+            int commandTimeoutSeconds = 30) 
+        {
+            object result;
+
+            // 入力チェック
+            if (conn == null) {
+                throw new ArgumentNullException(nameof(conn));
+            }
+
+            if (tx == null) {
+                throw new ArgumentNullException(nameof(tx));
+            }
+
+            if (string.IsNullOrWhiteSpace(sql)) {
+                throw new ArgumentException("sql is null or empty.", nameof(sql));
+            }
+
+            // コマンドを準備する（トランザクションに紐づける）
+            using (SqlCommand cmd = new SqlCommand(sql, conn, tx)) {
+                cmd.CommandType = CommandType.Text;
+
+                // タイムアウト設定
+                cmd.CommandTimeout = commandTimeoutSeconds;
+
+                // パラメータを追加する
+                if (addParameters != null) {
+                    addParameters(cmd.Parameters);
+                }
+
+                // 実行
+                result = cmd.ExecuteScalar();
+            }
+
+            // NULL/DBNull の場合
+            if (result == null || result == DBNull.Value) {
+                return default(T);
+            }
+
+            // 既に型が一致している場合はそのまま返す
+            if (result is T) {
+                return (T)result;
+            }
+
+            // Nullable<T> を考慮して変換する
+            Type targetType = typeof(T);
+            Type? underlyingType = Nullable.GetUnderlyingType(targetType);
+            if (underlyingType != null) {
+                targetType = underlyingType;
+            }
+
+            object converted = Convert.ChangeType(result, targetType);
+            return (T)converted;
+        }
+
+        /// <summary>
+        /// 既存の接続・トランザクション内でクエリを実行し、結果を List&lt;T&gt; に詰めて返します。
+        /// </summary>
+        public static List<T> QueryToList<T>(
+            SqlConnection conn,
+            SqlTransaction tx,
+            string sql,
+            Action<SqlParameterCollection> addParameters,
+            Func<SqlDataReader, T> mapRow,
+            int commandTimeoutSeconds = 30) {
+            List<T> list = new List<T>();
+
+            // 入力チェック
+            if (conn == null) {
+                throw new ArgumentNullException(nameof(conn));
+            }
+
+            if (tx == null) {
+                throw new ArgumentNullException(nameof(tx));
+            }
+
+            if (string.IsNullOrWhiteSpace(sql)) {
+                throw new ArgumentException("sql is null or empty.", nameof(sql));
+            }
+
+            if (mapRow == null) {
+                throw new ArgumentNullException(nameof(mapRow));
+            }
+
+            // コマンドを準備する（トランザクションに紐づける）
+            using (SqlCommand cmd = new SqlCommand(sql, conn, tx)) {
+                cmd.CommandType = CommandType.Text;
+
+                // タイムアウト設定
+                cmd.CommandTimeout = commandTimeoutSeconds;
+
+                // パラメータを追加する
+                if (addParameters != null) {
+                    addParameters(cmd.Parameters);
+                }
+
+                // 実行して読み取る
+                using (SqlDataReader reader = cmd.ExecuteReader()) {
+                    while (reader.Read()) {
+                        T item = mapRow(reader);
+                        list.Add(item);
+                    }
+                }
+            }
+
+            return list;
+        }
+
+        /// <summary>
         /// SqlParameter を作成します（NULL は DBNull.Value に置換します）。
         /// </summary>
         public static SqlParameter CreateParameter(string name, SqlDbType type, object value)
@@ -252,5 +410,127 @@ namespace KenshowLabo.Tools.Db
 
             return affectedRows;
         }
+
+        /// <summary>
+        /// DataTable を SqlBulkCopy で一括投入します（トランザクション無し）。
+        /// </summary>
+        /// <param name="connectionString">接続文字列</param>
+        /// <param name="destinationTableName">投入先テーブル名（例：dbo.IF_Nk_RaceEntryRow）</param>
+        /// <param name="dataTable">投入するDataTable</param>
+        /// <param name="addColumnMappings">列マッピング追加（任意）</param>
+        /// <param name="batchSize">バッチサイズ</param>
+        /// <param name="commandTimeoutSeconds">タイムアウト（0=無制限）</param>
+        /// <param name="options">SqlBulkCopyOptions</param>
+        public static void BulkInsertDataTable(
+            string connectionString,
+            string destinationTableName,
+            DataTable dataTable,
+            Action<SqlBulkCopyColumnMappingCollection>? addColumnMappings,
+            int batchSize = 5000,
+            int commandTimeoutSeconds = 0,
+            SqlBulkCopyOptions options = SqlBulkCopyOptions.Default) {
+            // 入力チェック
+            if (string.IsNullOrWhiteSpace(connectionString)) {
+                throw new ArgumentException("connectionString is null or empty.", nameof(connectionString));
+            }
+
+            if (string.IsNullOrWhiteSpace(destinationTableName)) {
+                throw new ArgumentException("destinationTableName is null or empty.", nameof(destinationTableName));
+            }
+
+            if (dataTable == null) {
+                throw new ArgumentNullException(nameof(dataTable));
+            }
+
+            // 0件は何もしない（INSERT相当の挙動として自然）
+            if (dataTable.Rows.Count == 0) {
+                return;
+            }
+
+            // 接続を開く
+            using (SqlConnection conn = new SqlConnection(connectionString)) {
+                conn.Open();
+
+                // BulkCopy実行
+                using (SqlBulkCopy bulk = new SqlBulkCopy(conn, options, null)) {
+                    // 投入先
+                    bulk.DestinationTableName = destinationTableName;
+
+                    // パフォーマンス系
+                    bulk.BatchSize = batchSize;
+                    bulk.BulkCopyTimeout = commandTimeoutSeconds;
+
+                    // 列マッピング（呼び出し側で明示したい場合）
+                    if (addColumnMappings != null) {
+                        addColumnMappings(bulk.ColumnMappings);
+                    }
+
+                    // 実行
+                    bulk.WriteToServer(dataTable);
+                }
+            }
+        }
+
+        /// <summary>
+        /// DataTable を SqlBulkCopy で一括投入します（既存トランザクション内）。
+        /// </summary>
+        /// <param name="conn">接続（Open済み想定）</param>
+        /// <param name="tx">トランザクション</param>
+        /// <param name="destinationTableName">投入先テーブル名</param>
+        /// <param name="dataTable">投入するDataTable</param>
+        /// <param name="addColumnMappings">列マッピング追加（任意）</param>
+        /// <param name="batchSize">バッチサイズ</param>
+        /// <param name="commandTimeoutSeconds">タイムアウト（0=無制限）</param>
+        /// <param name="options">SqlBulkCopyOptions</param>
+        public static void BulkInsertDataTable(
+            SqlConnection conn,
+            SqlTransaction tx,
+            string destinationTableName,
+            DataTable dataTable,
+            Action<SqlBulkCopyColumnMappingCollection>? addColumnMappings,
+            int batchSize = 5000,
+            int commandTimeoutSeconds = 0,
+            SqlBulkCopyOptions options = SqlBulkCopyOptions.Default) {
+            // 入力チェック
+            if (conn == null) {
+                throw new ArgumentNullException(nameof(conn));
+            }
+
+            if (tx == null) {
+                throw new ArgumentNullException(nameof(tx));
+            }
+
+            if (string.IsNullOrWhiteSpace(destinationTableName)) {
+                throw new ArgumentException("destinationTableName is null or empty.", nameof(destinationTableName));
+            }
+
+            if (dataTable == null) {
+                throw new ArgumentNullException(nameof(dataTable));
+            }
+
+            // 0件は何もしない
+            if (dataTable.Rows.Count == 0) {
+                return;
+            }
+
+            // BulkCopy実行（トランザクションに紐づける）
+            using (SqlBulkCopy bulk = new SqlBulkCopy(conn, options, tx)) {
+                // 投入先
+                bulk.DestinationTableName = destinationTableName;
+
+                // パフォーマンス系
+                bulk.BatchSize = batchSize;
+                bulk.BulkCopyTimeout = commandTimeoutSeconds;
+
+                // 列マッピング
+                if (addColumnMappings != null) {
+                    addColumnMappings(bulk.ColumnMappings);
+                }
+
+                // 実行
+                bulk.WriteToServer(dataTable);
+            }
+        }
+
     }
 }
