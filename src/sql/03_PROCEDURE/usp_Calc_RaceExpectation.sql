@@ -81,21 +81,74 @@ BEGIN
       AND cv.field_i  IS NOT NULL
       AND cv.field_i BETWEEN 5 AND 18
       AND cv.finish_i BETWEEN 1 AND cv.field_i
-    ),
-    PastScore AS
+    )
+    , PastScore AS
     (
         SELECT
-              p.race_id
+            p.race_id
             , p.horse_no
             , p.rn
-            , CAST((CAST(p.past_field AS DECIMAL(18,6)) - CAST(p.past_finish AS DECIMAL(18,6)) + 1.0)
-                    / NULLIF(CAST(p.past_field AS DECIMAL(18,6)), 0) AS DECIMAL(18,10)) AS raceScore
+            , base.raceScore
+            , CAST(
+                CASE
+                    /* 1) グレード優先 */
+                    WHEN p2.[グレード] IS NOT NULL AND (p2.[グレード] LIKE N'%G1%' OR p2.[グレード] LIKE N'%GI%') THEN 1.00
+                    WHEN p2.[グレード] IS NOT NULL AND (p2.[グレード] LIKE N'%G2%' OR p2.[グレード] LIKE N'%GII%') THEN 0.97
+                    WHEN p2.[グレード] IS NOT NULL AND (p2.[グレード] LIKE N'%G3%' OR p2.[グレード] LIKE N'%GIII%') THEN 0.95
+
+                    /* 2) クラス（条件） */
+                    WHEN p2.[クラス] IS NOT NULL AND (p2.[クラス] LIKE N'%オープン%' OR p2.[クラス] LIKE N'%OP%' OR p2.[クラス] LIKE N'%リステッド%' OR p2.[クラス] LIKE N'%L%') THEN 0.93
+                    WHEN p2.[クラス] IS NOT NULL AND (p2.[クラス] LIKE N'%3勝%' OR p2.[クラス] LIKE N'%1600万%') THEN 0.90
+                    WHEN p2.[クラス] IS NOT NULL AND (p2.[クラス] LIKE N'%2勝%' OR p2.[クラス] LIKE N'%1000万%') THEN 0.87
+                    WHEN p2.[クラス] IS NOT NULL AND (p2.[クラス] LIKE N'%1勝%' OR p2.[クラス] LIKE N'%500万%') THEN 0.84
+                    WHEN p2.[クラス] IS NOT NULL AND (p2.[クラス] LIKE N'%未勝利%' OR p2.[クラス] LIKE N'%新馬%') THEN 0.80
+
+                    ELSE 0.90  -- 不明は中庸（暫定）
+                END
+            AS DECIMAL(9,4)) AS class_mult
+
+            , CAST(
+                CASE
+                    WHEN base.raceScore IS NULL THEN NULL
+                    WHEN base.raceScore * 
+                        (CASE
+                            WHEN p2.[グレード] IS NOT NULL AND (p2.[グレード] LIKE N'%G1%' OR p2.[グレード] LIKE N'%GI%') THEN 1.00
+                            WHEN p2.[グレード] IS NOT NULL AND (p2.[グレード] LIKE N'%G2%' OR p2.[グレード] LIKE N'%GII%') THEN 0.97
+                            WHEN p2.[グレード] IS NOT NULL AND (p2.[グレード] LIKE N'%G3%' OR p2.[グレード] LIKE N'%GIII%') THEN 0.95
+                            WHEN p2.[クラス] IS NOT NULL AND (p2.[クラス] LIKE N'%オープン%' OR p2.[クラス] LIKE N'%OP%' OR p2.[クラス] LIKE N'%リステッド%' OR p2.[クラス] LIKE N'%L%') THEN 0.93
+                            WHEN p2.[クラス] IS NOT NULL AND (p2.[クラス] LIKE N'%3勝%' OR p2.[クラス] LIKE N'%1600万%') THEN 0.90
+                            WHEN p2.[クラス] IS NOT NULL AND (p2.[クラス] LIKE N'%2勝%' OR p2.[クラス] LIKE N'%1000万%') THEN 0.87
+                            WHEN p2.[クラス] IS NOT NULL AND (p2.[クラス] LIKE N'%1勝%' OR p2.[クラス] LIKE N'%500万%') THEN 0.84
+                            WHEN p2.[クラス] IS NOT NULL AND (p2.[クラス] LIKE N'%未勝利%' OR p2.[クラス] LIKE N'%新馬%') THEN 0.80
+                            ELSE 0.90
+                        END) > 1.0
+                    THEN 1.0
+                    ELSE base.raceScore *
+                        (CASE
+                            WHEN p2.[グレード] IS NOT NULL AND (p2.[グレード] LIKE N'%G1%' OR p2.[グレード] LIKE N'%GI%') THEN 1.00
+                            WHEN p2.[グレード] IS NOT NULL AND (p2.[グレード] LIKE N'%G2%' OR p2.[グレード] LIKE N'%GII%') THEN 0.97
+                            WHEN p2.[グレード] IS NOT NULL AND (p2.[グレード] LIKE N'%G3%' OR p2.[グレード] LIKE N'%GIII%') THEN 0.95
+                            WHEN p2.[クラス] IS NOT NULL AND (p2.[クラス] LIKE N'%オープン%' OR p2.[クラス] LIKE N'%OP%' OR p2.[クラス] LIKE N'%リステッド%' OR p2.[クラス] LIKE N'%L%') THEN 0.93
+                            WHEN p2.[クラス] IS NOT NULL AND (p2.[クラス] LIKE N'%3勝%' OR p2.[クラス] LIKE N'%1600万%') THEN 0.90
+                            WHEN p2.[クラス] IS NOT NULL AND (p2.[クラス] LIKE N'%2勝%' OR p2.[クラス] LIKE N'%1000万%') THEN 0.87
+                            WHEN p2.[クラス] IS NOT NULL AND (p2.[クラス] LIKE N'%1勝%' OR p2.[クラス] LIKE N'%500万%') THEN 0.84
+                            WHEN p2.[クラス] IS NOT NULL AND (p2.[クラス] LIKE N'%未勝利%' OR p2.[クラス] LIKE N'%新馬%') THEN 0.80
+                            ELSE 0.90
+                        END)
+                END
+            AS DECIMAL(18,10)) AS raceScore_adj
         FROM Past p
+        INNER JOIN dbo.VW_RaceResultContract p2
+            ON p2.race_id = p.past_race_id
+        CROSS APPLY
+        (
+            SELECT
+                CAST((CAST(p.past_field AS DECIMAL(18,6)) - CAST(p.past_finish AS DECIMAL(18,6)) + 1.0)
+                / NULLIF(CAST(p.past_field AS DECIMAL(18,6)), 0) AS DECIMAL(18,10)) AS raceScore
+        ) base
         WHERE p.rn <= @n_recent
-          AND TRY_CONVERT(INT, p.past_finish) IS NOT NULL
-          AND TRY_CONVERT(INT, p.past_field) IS NOT NULL
-    ),
-    Ability AS
+    )
+    ,Ability AS
     (
         SELECT
               ps.race_id
