@@ -5,9 +5,9 @@ GO
 --* RestoreFromTempTable
 CREATE TABLE dbo.ST_StylePlace
 (
-      track_cd         CHAR(2) NOT NULL
+      jyo_cd         CHAR(2) NOT NULL
     , surface_type     NVARCHAR(10) NOT NULL
-    , distance_band    INT NOT NULL
+    , distance_class    INT NOT NULL
     , style            NVARCHAR(10) NOT NULL      -- '逃げ','先行','差し','追込' 等（VWの脚質）
     , n                INT NOT NULL
     , hit_place        INT NOT NULL
@@ -15,5 +15,5 @@ CREATE TABLE dbo.ST_StylePlace
     , p_place_smooth   DECIMAL(9,6) NOT NULL
     , mult             DECIMAL(9,6) NOT NULL
     , updated_at       DATETIME2 NOT NULL DEFAULT SYSDATETIME()
-    , CONSTRAINT PK_ST_StylePlace PRIMARY KEY (track_cd, surface_type, distance_band, style)
+    , CONSTRAINT PK_ST_StylePlace PRIMARY KEY (jyo_cd, surface_type, distance_class, style)
 );
