@@ -48,27 +48,20 @@ SELECT
     , dgrade.[text] AS [グレード]
     , b.win5_flg AS WIN5_flg
 
-    -- 表示系：VW_Track を優先（引けない場合だけ辞書にフォールバック）
-    , COALESCE(vt.[場名], dcourse.[text]) AS [場名]
-
+    , dcourse.[text] AS [場名]
     , CAST(b.distance_m AS SMALLINT) AS [距離]
 
-    , COALESCE(
-          vt.[芝ダ],
-          CASE
-              WHEN b.baba_siba_cd IS NOT NULL
-               AND b.baba_siba_cd <> N'0'
-                  THEN N'芝'
-              WHEN b.baba_dirt_cd IS NOT NULL
-               AND b.baba_dirt_cd <> N'0'
-                  THEN N'ダ'
-              ELSE
-                  NULL
-          END
-      ) AS [芝/ダ]
-
-    , vt.[回り] AS [回り]
-    , vt.[内外] AS [内外]
+    -- 従来通り：芝/ダは馬場CDの有無（0以外）で判定
+    , CASE
+        WHEN b.baba_siba_cd IS NOT NULL
+         AND b.baba_siba_cd <> N'0'
+            THEN N'芝'
+        WHEN b.baba_dirt_cd IS NOT NULL
+         AND b.baba_dirt_cd <> N'0'
+            THEN N'ダ'
+        ELSE
+            NULL
+      END AS [芝/ダ]
 
     , b.frame_no AS [枠番]
     , b.horse_no AS [馬番]
@@ -144,57 +137,42 @@ SELECT
 FROM Base AS b
 LEFT JOIN dbo.MT_HorsePedigree AS p
     ON b.horse_id = p.horse_id
-
-LEFT JOIN dbo.VW_Track AS vt
-    ON  vt.JyoCD   = b.jyo_cd
-    AND vt.Kyori   = b.distance_m
-    AND vt.TrackCD = b.track_cd
-
 LEFT JOIN dbo.MT_CodeDictionary AS dcourse
     ON dcourse.code_type = N'RACE_COURSE'
    AND dcourse.code      = b.jyo_cd
    AND dcourse.is_active = 1
-
 LEFT JOIN dbo.MT_CodeDictionary AS dweather
     ON dweather.code_type = N'WEATHER'
    AND dweather.code      = b.weather_cd
    AND dweather.is_active = 1
-
 LEFT JOIN dbo.MT_CodeDictionary AS dsex
     ON dsex.code_type = N'SEX_CD'
    AND dsex.code      = b.sex_cd
    AND dsex.is_active = 1
-
 LEFT JOIN dbo.MT_CodeDictionary AS dgrade
     ON dgrade.code_type = N'GRADE'
    AND dgrade.code      = b.grade_cd
    AND dgrade.is_active = 1
-
 LEFT JOIN dbo.MT_CodeDictionary AS dclass
     ON dclass.code_type = N'RACE_CLASS'
    AND dclass.code      = b.jyoken_cd4
    AND dclass.is_active = 1
-
 LEFT JOIN dbo.MT_CodeDictionary AS dtype
     ON dtype.code_type = N'RACE_TYPE'
    AND dtype.code      = b.jyoken_syubetu_cd
    AND dtype.is_active = 1
-
 LEFT JOIN dbo.MT_CodeDictionary AS db_siba
     ON db_siba.code_type = N'BABA'
    AND db_siba.code      = b.baba_siba_cd
    AND db_siba.is_active = 1
-
 LEFT JOIN dbo.MT_CodeDictionary AS db_dirt
     ON db_dirt.code_type = N'BABA'
    AND db_dirt.code      = b.baba_dirt_cd
    AND db_dirt.is_active = 1
-
 LEFT JOIN dbo.TR_Payout AS sp
     ON  b.race_id   = sp.race_id
     AND b.horse_no  = sp.horse_no_1
     AND sp.bet_type = N'単勝'
-
 LEFT JOIN dbo.TR_Payout AS fp
     ON  b.race_id   = fp.race_id
     AND b.horse_no  = fp.horse_no_1
