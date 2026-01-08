@@ -358,7 +358,7 @@ namespace KenshowLabo.Tools.Db
         /// <summary>
         /// SqlParameter を作成します（NULL は DBNull.Value に置換します）。
         /// </summary>
-        public static SqlParameter CreateParameter(string name, SqlDbType type, object value)
+        public static SqlParameter CreateParameter(string name, SqlDbType type, object? value)
         {
             SqlParameter p = new SqlParameter(name, type);
 

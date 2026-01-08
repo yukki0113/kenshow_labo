@@ -25,7 +25,7 @@ CREATE TABLE dbo.TR_RaceEntry
     -- 出走馬情報
     , frame_no       TINYINT           NULL      -- 未確定は NULL
     , horse_no       TINYINT           NOT NULL  -- 未確定は 101～（例：101～）
-    , horse_id       CHAR(10)          NOT NULL
+    , horse_id       CHAR(10)          NULL
     , horse_name     NVARCHAR(30)      NOT NULL
     , sex            NVARCHAR(1)       NULL
     , age            TINYINT           NULL

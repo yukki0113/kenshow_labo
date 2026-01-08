@@ -105,14 +105,14 @@ VALUES
                 (SqlParameterCollection p) => {
                     p.Add(DbUtil.CreateParameter("@import_batch_id", SqlDbType.UniqueIdentifier, header.ImportBatchId));
                     p.Add(DbUtil.CreateParameter("@race_id", SqlDbType.Char, header.RaceId));
-                    p.Add(DbUtil.CreateParameter("@race_no_raw", SqlDbType.NVarChar, (object?)header.RaceNoRaw));
-                    p.Add(DbUtil.CreateParameter("@race_date_raw", SqlDbType.NVarChar, (object?)header.RaceDateRaw));
-                    p.Add(DbUtil.CreateParameter("@race_name_raw", SqlDbType.NVarChar, (object?)header.RaceNameRaw));
-                    p.Add(DbUtil.CreateParameter("@track_name_raw", SqlDbType.NVarChar, (object?)header.TrackNameRaw));
-                    p.Add(DbUtil.CreateParameter("@surface_distance_raw", SqlDbType.NVarChar, (object?)header.SurfaceDistanceRaw));
+                    p.Add(DbUtil.CreateParameter("@race_no_raw", SqlDbType.NVarChar, header.RaceNoRaw));
+                    p.Add(DbUtil.CreateParameter("@race_date_raw", SqlDbType.NVarChar, header.RaceDateRaw));
+                    p.Add(DbUtil.CreateParameter("@race_name_raw", SqlDbType.NVarChar, header.RaceNameRaw));
+                    p.Add(DbUtil.CreateParameter("@track_name_raw", SqlDbType.NVarChar, header.TrackNameRaw));
+                    p.Add(DbUtil.CreateParameter("@surface_distance_raw", SqlDbType.NVarChar, header.SurfaceDistanceRaw));
                     p.Add(DbUtil.CreateParameter("@scraped_at", SqlDbType.DateTime2, header.ScrapedAt));
-                    p.Add(DbUtil.CreateParameter("@source_url", SqlDbType.NVarChar, (object?)header.SourceUrl));
-                    p.Add(DbUtil.CreateParameter("@source_file", SqlDbType.NVarChar, (object?)header.SourceFile));
+                    p.Add(DbUtil.CreateParameter("@source_url", SqlDbType.NVarChar, header.SourceUrl));
+                    p.Add(DbUtil.CreateParameter("@source_file", SqlDbType.NVarChar, header.SourceFile));
                 },
                 30
             );

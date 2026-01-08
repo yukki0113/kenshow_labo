@@ -1,296 +1,548 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using HtmlAgilityPack;
 using ImportRaceEntries.Netkeiba.Models;
 
 namespace ImportRaceEntries.Netkeiba {
+    /// <summary>
+    /// netkeiba 出馬表HTML（手動保存）を解析します。
+    /// テーブルの class 名ではなく「見出し文字」で出馬表テーブルを特定します。
+    /// </summary>
     public sealed class NetkeibaRaceEntryHtmlParser {
-        private static readonly Regex RaceIdRegex = new Regex(@"/race/(\d{12})", RegexOptions.Compiled);
-        private static readonly Regex NkHorseIdRegex = new Regex(@"/horse/(\d+)", RegexOptions.Compiled);
+        /// <summary>
+        /// 直近の失敗理由（TryParseがfalseのとき参照）。
+        /// </summary>
+        public string LastError { get; private set; } = string.Empty;
 
         /// <summary>
-        /// netkeiba出馬表HTMLを解析してIF投入用のrawデータを生成します。
-        /// 結果表（ResultRefund）等の場合は例外ではなくfalse返却でスキップ可能にします。
+        /// 出馬表HTMLを解析します。出馬表でない場合、または解析に失敗した場合は false を返します。
         /// </summary>
-        public bool TryParse(string html, Guid importBatchId, DateTime scrapedAt, string? sourceFile, out NetkeibaRaceHeaderRaw header, out List<NetkeibaRaceEntryRowRaw> rows) {
+        public bool TryParse(
+            string html,
+            Guid importBatchId,
+            DateTime scrapedAt,
+            string sourceFile,
+            out NetkeibaRaceHeaderRaw header,
+            out List<NetkeibaRaceEntryRowRaw> rows) {
+            // out初期化
             header = new NetkeibaRaceHeaderRaw();
             rows = new List<NetkeibaRaceEntryRowRaw>();
+            LastError = string.Empty;
 
+            // 入力チェック
+            if (string.IsNullOrWhiteSpace(html)) {
+                LastError = "html is empty.";
+                return false;
+            }
+
+            // HTMLロード
             HtmlDocument doc = new HtmlDocument();
             doc.LoadHtml(html);
 
-            // ==============================
-            // 1) レースIDの抽出
-            // ==============================
-            string? raceId = ExtractRaceId(doc);
-            if (string.IsNullOrWhiteSpace(raceId)) {
-                return false;
-            }
-
-            // ==============================
-            // 2) 結果表（回顧ページ）除外
-            // ==============================
-            // RaceTable01 は出馬表も結果表も共通なので、classで判定してスキップ
-            HtmlNode? table = doc.DocumentNode.SelectSingleNode("//table[contains(@class,'RaceTable01')]");
+            // 1) 出馬表テーブルを特定（見出し判定）
+            HtmlNode? table = FindEntryTable(doc);
             if (table == null) {
+                LastError = "entry table not found (header-based detection failed).";
                 return false;
             }
 
-            string tableClass = table.GetAttributeValue("class", string.Empty);
-            if (tableClass.IndexOf("ResultRefund", StringComparison.OrdinalIgnoreCase) >= 0) {
+            // 2) race_id を取得（canonical / og:url / 本文から推定）
+            string? raceId = TryExtractRaceId(doc, sourceFile);
+            if (string.IsNullOrWhiteSpace(raceId)) {
+                LastError = "race_id not found.";
                 return false;
             }
 
-            // ==============================
-            // 3) ヘッダraw抽出（まずは文字列でOK）
-            // ==============================
-            string? raceName = InnerTextOrNull(doc.DocumentNode.SelectSingleNode("//h1[contains(@class,'RaceName')]"));
-            string? raceData01 = InnerTextOrNull(doc.DocumentNode.SelectSingleNode("//p[contains(@class,'RaceData01')]"));
+            // 3) ヘッダ行（列マッピング）を作る
+            Dictionary<string, int> col = BuildColumnIndexMap(table);
+            if (!col.ContainsKey("馬名")) {
+                // 見出し判定で拾っているので通常あり得ないが、防御
+                LastError = "column '馬名' not found.";
+                return false;
+            }
 
-            // RaceData01 から「日付/場名/R/芝ダ距離」等が取れることが多いので、rawとして保持
-            // 例: "12月28日(日) 中山11R 芝2500m"
-            string? raceDateRaw = null;
-            string? trackNameRaw = null;
-            string? raceNoRaw = null;
-            string? surfaceDistanceRaw = null;
+            // 4) レースヘッダ（最低限）
+            NetkeibaRaceHeaderRaw h = new NetkeibaRaceHeaderRaw();
+            h.ImportBatchId = importBatchId;
+            h.RaceId = raceId;
+            h.ScrapedAt = scrapedAt;
+            h.SourceFile = sourceFile;
+            h.SourceUrl = TryExtractSourceUrl(doc);
 
-            if (!string.IsNullOrWhiteSpace(raceData01)) {
-                // かなり揺れるので、ここでは過剰にパースせず「取れたら取る」方針
-                // 1) raceNo（"11R"）抽出
-                Match mNo = Regex.Match(raceData01, @"(\d{1,2}\s*[RＲ])");
-                if (mNo.Success) {
-                    raceNoRaw = mNo.Groups[1].Value.Replace(" ", string.Empty);
-                }
+            // ★ヘッダは og:title / title を最優先にする（ここが最重要）
+            ApplyHeaderFromTitle(doc, h);
 
-                // 2) 距離（芝/ダ + 数字 + m）抽出
-                Match mDist = Regex.Match(raceData01, @"(芝|ダ|ダート|障)\s*(\d{3,4})\s*m", RegexOptions.IgnoreCase);
-                if (mDist.Success) {
-                    string surface = mDist.Groups[1].Value;
-                    string dist = mDist.Groups[2].Value;
-                    surfaceDistanceRaw = surface + dist + "m";
-                }
-                else {
-                    // "芝2500m" のような密結合も拾う
-                    Match mDist2 = Regex.Match(raceData01, @"(芝|ダ)(\d{3,4})m", RegexOptions.IgnoreCase);
-                    if (mDist2.Success) {
-                        surfaceDistanceRaw = mDist2.Groups[1].Value + mDist2.Groups[2].Value + "m";
-                    }
-                }
+            // ★距離（芝/ダ＋距離m）は RaceData01 を最優先にする
+            h.SurfaceDistanceRaw = ExtractSurfaceDistanceRaw(doc);
 
-                // 3) trackNameは「Rの手前の漢字」などで雑に拾えるが誤検知しやすいので、
-                //    現段階はraw優先：C#で厳密化しない
-                //    ただし、スペース区切りがあるケースは拾う
-                string[] tokens = raceData01.Split(new[] { ' ', '　' }, StringSplitOptions.RemoveEmptyEntries);
-                if (tokens.Length >= 2) {
-                    raceDateRaw = tokens[0];
-                    trackNameRaw = tokens[1];
+            // ★フォールバック（titleから取れなかった場合のみ）
+            if (string.IsNullOrWhiteSpace(h.RaceNameRaw)) {
+                h.RaceNameRaw = TryExtractRaceName(doc) ?? string.Empty;
+            }
+
+            if (string.IsNullOrWhiteSpace(h.RaceNoRaw)) {
+                // race_id末尾2桁（11Rなら "11"）を文字列化
+                if (!string.IsNullOrWhiteSpace(raceId) && raceId.Length == 12) {
+                    h.RaceNoRaw = int.Parse(raceId.Substring(10, 2)).ToString();
                 }
                 else {
-                    raceDateRaw = raceData01;
+                    h.RaceNoRaw = string.Empty;
                 }
             }
 
-            header = new NetkeibaRaceHeaderRaw {
-                ImportBatchId = importBatchId,
-                RaceId = raceId,
-                RaceNoRaw = raceNoRaw,
-                RaceDateRaw = raceDateRaw,
-                RaceNameRaw = raceName,
-                TrackNameRaw = trackNameRaw,
-                SurfaceDistanceRaw = surfaceDistanceRaw,
-                ScrapedAt = scrapedAt,
-                SourceUrl = ExtractCanonicalUrl(doc),
-                SourceFile = sourceFile
-            };
+            if (string.IsNullOrWhiteSpace(h.RaceDateRaw)) {
+                h.RaceDateRaw = TryExtractRaceDateRaw(doc) ?? string.Empty;
+            }
 
-            // ==============================
-            // 4) 明細行の列Indexをヘッダ<th>から構成
-            // ==============================
-            Dictionary<string, int> colIndex = BuildColumnIndex(table);
+            if (string.IsNullOrWhiteSpace(h.TrackNameRaw)) {
+                // titleから取れない場合の補助（今は空実装なら race_id からでもOK）
+                h.TrackNameRaw = TryExtractTrackNameRaw(doc) ?? string.Empty;
+            }
 
-            // 期待列（netkeiba表記の揺れがあるので候補を複数）
-            int idxWaku = GetIndex(colIndex, new[] { "枠", "枠番" });
-            int idxUma = GetIndex(colIndex, new[] { "馬", "馬番" });
-            int idxHorse = GetIndex(colIndex, new[] { "馬名" });
-            int idxSexAge = GetIndex(colIndex, new[] { "性齢", "性令" });
-            int idxJockey = GetIndex(colIndex, new[] { "騎手" });
-            int idxWeight = GetIndex(colIndex, new[] { "斤量" });
-
-            // <tbody>の<tr>を取得（ヘッダ行は除外）
-            HtmlNodeCollection? trNodes = table.SelectNodes(".//tr[td]");
-            if (trNodes == null || trNodes.Count == 0) {
+            // 5) 明細行を読む
+            List<HtmlNode> trList = table.SelectNodes(".//tr")?.ToList() ?? new List<HtmlNode>();
+            if (trList.Count == 0) {
+                LastError = "entry table has no rows.";
                 return false;
             }
 
             int rowNo = 0;
 
-            foreach (HtmlNode tr in trNodes) {
-                HtmlNodeCollection? tds = tr.SelectNodes("./td");
-                if (tds == null) {
+            foreach (HtmlNode tr in trList) {
+                // 見出し行は th を含むことが多いので除外
+                List<HtmlNode> tds = tr.SelectNodes("./td")?.ToList() ?? new List<HtmlNode>();
+                if (tds.Count == 0) {
                     continue;
                 }
 
-                // 馬名列が取れない行は捨てる（ヘッダっぽい行や空行対策）
-                string? horseNameCell = GetCellText(tds, idxHorse);
-                if (string.IsNullOrWhiteSpace(horseNameCell)) {
+                // 「馬名」列を取れない行は除外（広告/注記/空行対策）
+                HtmlNode? horseNameTd = GetTd(tds, col, "馬名");
+                if (horseNameTd == null) {
                     continue;
                 }
 
+                string horseName = NormalizeText(horseNameTd.InnerText);
+                if (string.IsNullOrWhiteSpace(horseName)) {
+                    continue;
+                }
+
+                string? nkHorseId = TryExtractNkHorseIdFromHorseCell(horseNameTd);
+
+                NetkeibaRaceEntryRowRaw r = new NetkeibaRaceEntryRowRaw();
+                r.ImportBatchId = importBatchId;
+                r.RowNo = rowNo + 1;
+
+                // raw列（DB側で型変換する前提）
+                r.HorseNameRaw = horseName;
+                r.NkHorseId = nkHorseId;
+                r.JvHorseId = null;
+
+                r.FrameNoRaw = NormalizeText(GetTdText(tds, col, "枠"));
+                r.HorseNoRaw = NormalizeText(GetTdText(tds, col, "馬番"));
+                r.SexAgeRaw = NormalizeText(GetTdText(tds, col, "性齢"));
+                r.JockeyNameRaw = NormalizeText(GetTdText(tds, col, "騎手"));
+                r.CarriedWeightRaw = NormalizeText(GetTdText(tds, col, "斤量"));
+
+                rows.Add(r);
                 rowNo++;
-
-                string? nkHorseId = ExtractNkHorseIdFromRow(tr);
-
-                NetkeibaRaceEntryRowRaw row = new NetkeibaRaceEntryRowRaw {
-                    ImportBatchId = importBatchId,
-                    RowNo = rowNo,
-                    NkHorseId = nkHorseId,
-                    JvHorseId = null, // 後段で解決
-                    FrameNoRaw = GetCellText(tds, idxWaku),
-                    HorseNoRaw = GetCellText(tds, idxUma),
-                    HorseNameRaw = NormalizeSpace(horseNameCell),
-                    SexAgeRaw = GetCellText(tds, idxSexAge),
-                    JockeyNameRaw = GetCellText(tds, idxJockey),
-                    CarriedWeightRaw = GetCellText(tds, idxWeight)
-                };
-
-                rows.Add(row);
             }
 
-            // 最低限：馬行が1件も取れないならスキップ
             if (rows.Count == 0) {
+                LastError = "entry rows parsed = 0 (table found but no horse rows). "
+                          + "Possible causes: page not fully loaded when saved / structure changed.";
                 return false;
             }
 
+            header = h;
             return true;
         }
 
-        private static string? ExtractRaceId(HtmlDocument doc) {
-            // canonical から優先
-            string? canonical = ExtractCanonicalUrl(doc);
-            if (!string.IsNullOrWhiteSpace(canonical)) {
-                Match m = RaceIdRegex.Match(canonical);
-                if (m.Success) {
-                    return m.Groups[1].Value;
-                }
-            }
+        /// <summary>
+        /// 出馬表テーブルを「見出し」で探します。
+        /// </summary>
+        private static HtmlNode? FindEntryTable(HtmlDocument doc) {
+            List<HtmlNode> tables = doc.DocumentNode.SelectNodes("//table")?.ToList() ?? new List<HtmlNode>();
 
-            // ページ内の /race/12桁 を探索
-            string html = doc.DocumentNode.OuterHtml;
-            Match m2 = RaceIdRegex.Match(html);
-            if (m2.Success) {
-                return m2.Groups[1].Value;
+            foreach (HtmlNode t in tables) {
+                List<string> headers = ExtractHeaderTexts(t);
+
+                // 出馬表として必要な見出し
+                bool hasHorse = headers.Any(x => x.Contains("馬名"));
+                bool hasSexAge = headers.Any(x => x.Contains("性齢") || x.Contains("性令"));
+                bool hasJockey = headers.Any(x => x.Contains("騎手"));
+                bool hasWeight = headers.Any(x => x.Contains("斤量"));
+
+                // 結果ページの「着順」テーブルを誤検出しないための簡易フィルタ
+                bool hasFinish = headers.Any(x => x.Contains("着順"));
+
+                if (hasHorse && hasSexAge && hasJockey && hasWeight && !hasFinish) {
+                    return t;
+                }
             }
 
             return null;
         }
 
-        private static string? ExtractCanonicalUrl(HtmlDocument doc) {
-            HtmlNode? node = doc.DocumentNode.SelectSingleNode("//link[@rel='canonical']");
-            if (node == null) {
-                return null;
+        /// <summary>
+        /// テーブルの見出し（th）を抽出します。
+        /// </summary>
+        private static List<string> ExtractHeaderTexts(HtmlNode table) {
+            List<string> list = new List<string>();
+
+            HtmlNode? headerRow = table.SelectSingleNode(".//tr[.//th]");
+            if (headerRow == null) {
+                return list;
             }
-            string href = node.GetAttributeValue("href", string.Empty);
-            if (string.IsNullOrWhiteSpace(href)) {
-                return null;
+
+            List<HtmlNode> ths = headerRow.SelectNodes("./th")?.ToList() ?? new List<HtmlNode>();
+            foreach (HtmlNode th in ths) {
+                string text = NormalizeText(th.InnerText);
+                if (!string.IsNullOrWhiteSpace(text)) {
+                    list.Add(text);
+                }
             }
-            return href;
+
+            return list;
         }
 
-        private static Dictionary<string, int> BuildColumnIndex(HtmlNode table) {
-            Dictionary<string, int> map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        /// <summary>
+        /// 見出し→列Indexマップを作成します。
+        /// </summary>
+        private static Dictionary<string, int> BuildColumnIndexMap(HtmlNode table) {
+            Dictionary<string, int> map = new Dictionary<string, int>(StringComparer.Ordinal);
 
-            // thテキストを順番に取得（複数ヘッダ行がある場合もあるので最初の thead を優先）
-            HtmlNodeCollection? ths = table.SelectNodes(".//thead//th");
-            if (ths == null) {
-                ths = table.SelectNodes(".//tr/th");
-            }
-
-            if (ths == null) {
+            HtmlNode? headerRow = table.SelectSingleNode(".//tr[.//th]");
+            if (headerRow == null) {
                 return map;
             }
 
-            int i = 0;
-            foreach (HtmlNode th in ths) {
-                string key = NormalizeSpace(th.InnerText ?? string.Empty);
-                if (!string.IsNullOrWhiteSpace(key)) {
-                    if (!map.ContainsKey(key)) {
-                        map.Add(key, i);
-                    }
+            List<HtmlNode> ths = headerRow.SelectNodes("./th")?.ToList() ?? new List<HtmlNode>();
+
+            for (int i = 0; i < ths.Count; i++) {
+                string text = NormalizeText(ths[i].InnerText);
+
+                // よく使う見出しを正規化してキーにする
+                if (text.Contains("枠")) {
+                    map["枠"] = i;
                 }
-                i++;
+                else if (text.Contains("馬番")) {
+                    map["馬番"] = i;
+                }
+                else if (text.Contains("馬名")) {
+                    map["馬名"] = i;
+                }
+                else if (text.Contains("性齢") || text.Contains("性令")) {
+                    map["性齢"] = i;
+                }
+                else if (text.Contains("騎手")) {
+                    map["騎手"] = i;
+                }
+                else if (text.Contains("斤量")) {
+                    map["斤量"] = i;
+                }
             }
 
             return map;
         }
 
-        private static int GetIndex(Dictionary<string, int> map, string[] candidates) {
-            foreach (string c in candidates) {
-                int idx;
-                if (map.TryGetValue(c, out idx)) {
-                    return idx;
-                }
+        private static HtmlNode? GetTd(List<HtmlNode> tds, Dictionary<string, int> map, string key) {
+            if (!map.TryGetValue(key, out int idx)) {
+                return null;
             }
-            return -1;
+
+            if (idx < 0 || idx >= tds.Count) {
+                return null;
+            }
+
+            return tds[idx];
         }
 
-        private static string? GetCellText(HtmlNodeCollection tds, int idx) {
-            if (idx < 0) {
-                return null;
-            }
-            if (idx >= tds.Count) {
-                return null;
+        private static string GetTdText(List<HtmlNode> tds, Dictionary<string, int> map, string key) {
+            HtmlNode? td = GetTd(tds, map, key);
+            if (td == null) {
+                return string.Empty;
             }
 
-            string text = NormalizeSpace(tds[idx].InnerText ?? string.Empty);
-            if (string.IsNullOrWhiteSpace(text)) {
-                return null;
-            }
-            return text;
+            return td.InnerText;
         }
 
-        private static string? ExtractNkHorseIdFromRow(HtmlNode tr) {
-            HtmlNode? a = tr.SelectSingleNode(".//a[contains(@href,'/horse/')]");
+        private static string NormalizeText(string? s) {
+            if (string.IsNullOrWhiteSpace(s)) {
+                return string.Empty;
+            }
+
+            // 全角スペースや改行を潰して整形
+            string t = s.Replace("\u3000", " ");
+            t = Regex.Replace(t, @"\s+", " ");
+            return t.Trim();
+        }
+
+        private static string? TryExtractNkHorseIdFromHorseCell(HtmlNode horseNameTd) {
+            // /horse/XXXX/ のリンクを探す
+            HtmlNode? a = horseNameTd.SelectSingleNode(".//a[contains(@href,'/horse/')]");
             if (a == null) {
                 return null;
             }
 
             string href = a.GetAttributeValue("href", string.Empty);
-            if (string.IsNullOrWhiteSpace(href)) {
-                return null;
-            }
-
-            Match m = NkHorseIdRegex.Match(href);
+            Match m = Regex.Match(href, @"/horse/(\d+)");
             if (!m.Success) {
                 return null;
             }
 
-            // 10桁0埋めに寄せる（DB側がCHAR(10)のため）
-            string digits = m.Groups[1].Value;
-            string padded = digits.PadLeft(10, '0');
-            return padded;
+            return m.Groups[1].Value;
         }
 
-        private static string? InnerTextOrNull(HtmlNode? node) {
-            if (node == null) {
-                return null;
+        private static string? TryExtractRaceId(HtmlDocument doc, string sourceFile) {
+            // 1) canonical / og:url
+            string? url = TryExtractSourceUrl(doc);
+            if (!string.IsNullOrWhiteSpace(url)) {
+                // /race/123456789012
+                Match m1 = Regex.Match(url, @"/race/(\d{12})");
+                if (m1.Success) {
+                    return m1.Groups[1].Value;
+                }
+
+                // shutuba.html?race_id=123456789012
+                Match m2 = Regex.Match(url, @"[?&]race_id=(\d{12})");
+                if (m2.Success) {
+                    return m2.Groups[1].Value;
+                }
             }
-            string text = NormalizeSpace(node.InnerText ?? string.Empty);
-            if (string.IsNullOrWhiteSpace(text)) {
-                return null;
+
+            // 2) HTML全体から拾う（URLが埋まっている・JS変数・リンク等）
+            string allHtml = doc.DocumentNode.InnerHtml;
+
+            // shutuba.html?race_id=...
+            Match m3 = Regex.Match(allHtml, @"[?&]race_id=(\d{12})");
+            if (m3.Success) {
+                return m3.Groups[1].Value;
             }
-            return text;
+
+            // /race/123456789012
+            Match m4 = Regex.Match(allHtml, @"/race/(\d{12})");
+            if (m4.Success) {
+                return m4.Groups[1].Value;
+            }
+
+            // "race_id":"123456789012" や race_id = "123..."
+            Match m5 = Regex.Match(allHtml, @"race[_\-]?id[""']?\s*[:=]\s*[""'](\d{12})[""']");
+            if (m5.Success) {
+                return m5.Groups[1].Value;
+            }
+
+            // 3) 最後の保険：ファイル名から組み立て
+            string? fallback = TryBuildRaceIdFromFileName(sourceFile);
+            if (!string.IsNullOrWhiteSpace(fallback)) {
+                return fallback;
+            }
+
+            return null;
         }
 
-        private static string NormalizeSpace(string s) {
-            if (s == null) {
+        private static string? TryExtractSourceUrl(HtmlDocument doc) {
+            // <link rel="canonical" href="...">
+            HtmlNode? canonical = doc.DocumentNode.SelectSingleNode("//link[@rel='canonical']");
+            if (canonical != null) {
+                string href = canonical.GetAttributeValue("href", string.Empty);
+                if (!string.IsNullOrWhiteSpace(href)) {
+                    return href;
+                }
+            }
+
+            // <meta property="og:url" content="...">
+            HtmlNode? og = doc.DocumentNode.SelectSingleNode("//meta[@property='og:url']");
+            if (og != null) {
+                string content = og.GetAttributeValue("content", string.Empty);
+                if (!string.IsNullOrWhiteSpace(content)) {
+                    return content;
+                }
+            }
+
+            return null;
+        }
+
+        private static string? TryExtractRaceName(HtmlDocument doc) {
+            // よくある: h1
+            HtmlNode? h1 = doc.DocumentNode.SelectSingleNode("//h1");
+            if (h1 != null) {
+                string t = NormalizeText(h1.InnerText);
+                if (!string.IsNullOrWhiteSpace(t)) {
+                    return t;
+                }
+            }
+
+            return null;
+        }
+
+        private static string TryExtractRaceDateRaw(HtmlDocument doc) {
+            string text = doc.DocumentNode.InnerText;
+
+            Match m = Regex.Match(text, @"(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日");
+            if (!m.Success) {
                 return string.Empty;
             }
-            string t = s.Replace("\r", " ").Replace("\n", " ").Replace("\t", " ");
-            t = Regex.Replace(t, @"\s+", " ").Trim();
-            return t;
+
+            int y = int.Parse(m.Groups[1].Value);
+            int mo = int.Parse(m.Groups[2].Value);
+            int d = int.Parse(m.Groups[3].Value);
+
+            DateTime dt = new DateTime(y, mo, d);
+            return dt.ToString("yyyy-MM-dd");
         }
+
+        private static string? TryExtractTrackNameRaw(HtmlDocument doc) {
+            // まずはタイトル/本文から雑に拾う（後で必要なら精密化）
+            string text = NormalizeText(doc.DocumentNode.InnerText);
+
+            // 例: 中山, 阪神 などは race_id からも引ける設計だが、ここではrawで持つ
+            // 必要ならここを強化
+            return string.Empty;
+        }
+
+        private static string? TryExtractSurfaceDistanceRaw(HtmlDocument doc) {
+            // 例: 芝2500m / ダ1800m などを本文から拾う
+            string text = NormalizeText(doc.DocumentNode.InnerText);
+            Match m = Regex.Match(text, @"(芝|ダート|ダ)\s*(\d{3,4})m");
+            if (m.Success) {
+                return m.Groups[1].Value + m.Groups[2].Value + "m";
+            }
+
+            return string.Empty;
+        }
+
+        private static string? TryBuildRaceIdFromFileName(string sourceFile) {
+            // 例: 20260107_nakayama_11.html
+            if (string.IsNullOrWhiteSpace(sourceFile)) {
+                return null;
+            }
+
+            string name = Path.GetFileNameWithoutExtension(sourceFile);
+
+            // yyyyMMdd_(track)_NN
+            Match m = Regex.Match(name, @"^(?<ymd>\d{8})_(?<track>[^_]+)_(?<r>\d{1,2})");
+            if (!m.Success) {
+                return null;
+            }
+
+            string ymd = m.Groups["ymd"].Value;
+            string track = m.Groups["track"].Value.ToLowerInvariant();
+            string r = m.Groups["r"].Value;
+
+            // 右側ゼロ埋め（11 -> "11", 1 -> "01"）
+            string raceNo2 = int.Parse(r).ToString("00");
+
+            // トラック名→場コード（JRA-VAN準拠の想定）
+            string? jyoCd2 = TryResolveJyoCdFromToken(track);
+            if (string.IsNullOrWhiteSpace(jyoCd2)) {
+                return null;
+            }
+
+            return ymd + jyoCd2 + raceNo2;
+        }
+
+        private static string? TryResolveJyoCdFromToken(string trackToken) {
+            // ローマ字・日本語どちらでも運用できるように最低限
+            Dictionary<string, string> map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "sapporo",  "01" }, { "札幌", "01" },
+                { "hakodate", "02" }, { "函館", "02" },
+                { "fukushima","03" }, { "福島", "03" },
+                { "niigata",  "04" }, { "新潟", "04" },
+                { "tokyo",    "05" }, { "東京", "05" },
+                { "nakayama", "06" }, { "中山", "06" },
+                { "chukyo",   "07" }, { "中京", "07" },
+                { "kyoto",    "08" }, { "京都", "08" },
+                { "hanshin",  "09" }, { "阪神", "09" },
+                { "kokura",   "10" }, { "小倉", "10" }
+            };
+
+            if (map.TryGetValue(trackToken, out string? cd)) {
+                return cd;
+            }
+
+            return null;
+        }
+
+        private static string TryExtractOgTitleOrTitle(HtmlDocument doc) {
+            HtmlNode? og = doc.DocumentNode.SelectSingleNode("//meta[@property='og:title']");
+            if (og != null) {
+                string content = og.GetAttributeValue("content", string.Empty);
+                content = NormalizeText(content);
+                if (!string.IsNullOrWhiteSpace(content)) {
+                    return content;
+                }
+            }
+
+            HtmlNode? title = doc.DocumentNode.SelectSingleNode("//title");
+            if (title != null) {
+                string t = NormalizeText(title.InnerText);
+                if (!string.IsNullOrWhiteSpace(t)) {
+                    return t;
+                }
+            }
+
+            return string.Empty;
+        }
+
+        private static void ApplyHeaderFromTitle(HtmlDocument doc, NetkeibaRaceHeaderRaw header) {
+            string title = TryExtractOgTitleOrTitle(doc);
+            if (string.IsNullOrWhiteSpace(title)) {
+                return;
+            }
+
+            // 例:
+            // "フェアリーＳ(G3) 出馬表 | 2026年1月11日 中山11R レース情報(JRA) - netkeiba"
+            Match m = Regex.Match(
+                title,
+                @"^(?<name>.+?)\s*出馬表\s*\|\s*(?<y>\d{4})年(?<mo>\d{1,2})月(?<d>\d{1,2})日\s*(?<track>.+?)(?<r>\d{1,2})R"
+            );
+
+            if (!m.Success) {
+                return;
+            }
+
+            string name = m.Groups["name"].Value.Trim();
+            int y = int.Parse(m.Groups["y"].Value);
+            int mo = int.Parse(m.Groups["mo"].Value);
+            int d = int.Parse(m.Groups["d"].Value);
+
+            header.RaceNameRaw = name;
+            header.RaceDateRaw = new DateTime(y, mo, d).ToString("yyyy-MM-dd");
+            header.TrackNameRaw = m.Groups["track"].Value.Trim();
+            header.RaceNoRaw = int.Parse(m.Groups["r"].Value).ToString();
+        }
+
+        private static string ExtractSurfaceDistanceRaw(HtmlDocument doc) {
+            HtmlNode? n = doc.DocumentNode.SelectSingleNode("//div[contains(@class,'RaceData01')]");
+            if (n == null) {
+                // フォールバック（既存の本文検索でもOK）
+                return TryExtractSurfaceDistanceRaw(doc) ?? string.Empty;
+            }
+
+            string t = NormalizeText(n.InnerText); // "15:45発走 / 芝1600m (右 外 C)"
+            Match m = Regex.Match(t, @"(芝|ダート|ダ)\s*(\d{3,4})m");
+            if (!m.Success) {
+                return TryExtractSurfaceDistanceRaw(doc) ?? string.Empty;
+            }
+
+            string surface = m.Groups[1].Value;
+            if (surface == "ダ") {
+                surface = "ダート";
+            }
+
+            string dist = m.Groups[2].Value;
+
+            // 表示は "芝1600m" / "ダ1600m" に寄せる
+            if (surface == "ダート") {
+                return "ダ" + dist + "m";
+            }
+
+            return "芝" + dist + "m";
+        }
+
     }
 }
