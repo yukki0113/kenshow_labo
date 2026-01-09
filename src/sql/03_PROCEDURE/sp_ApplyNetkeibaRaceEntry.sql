@@ -80,6 +80,106 @@ BEGIN
             r.import_batch_id = @import_batch_id
             AND r.jv_horse_id IS NULL
             AND r.nk_horse_id IS NOT NULL;
+        
+        ------------------------------------------------------------
+        -- 1.5) MPで埋まらない行は「馬名 → 血統マスタ」で補完する
+        --      同名が複数いる場合は horse_id 降順 TOP1 を採用する
+        ------------------------------------------------------------
+
+        -- まず対象行（未解決）を抽出し、候補と件数を一時表に作る
+        IF OBJECT_ID('tempdb..#NameResolve') IS NOT NULL
+        BEGIN
+            DROP TABLE #NameResolve;
+        END
+
+        SELECT
+              r.import_batch_id
+            , r.row_no
+            , LTRIM(RTRIM(REPLACE(ISNULL(r.horse_name_raw, N''), N'　', N' '))) AS horse_name_key
+
+            -- 解決結果（候補がある場合は horse_id 降順TOP1）
+            , ca.chosen_horse_id
+            , ca.cand_count
+        INTO #NameResolve
+        FROM dbo.IF_Nk_RaceEntryRow r
+        OUTER APPLY
+        (
+            SELECT TOP (1)
+                  x.horse_id AS chosen_horse_id
+                , x.cand_count
+            FROM
+            (
+                SELECT
+                      p.horse_id
+                    , COUNT(*) OVER () AS cand_count
+                FROM dbo.MT_HorsePedigree p
+                WHERE
+                    p.horse_name = LTRIM(RTRIM(REPLACE(ISNULL(r.horse_name_raw, N''), N'　', N' ')))
+            ) x
+            ORDER BY x.horse_id DESC
+        ) ca
+        WHERE
+            r.import_batch_id = @import_batch_id
+            AND r.jv_horse_id IS NULL
+            AND NULLIF(LTRIM(RTRIM(r.horse_name_raw)), N'') IS NOT NULL;
+
+        -- 一時表から IF明細の jv_horse_id を埋める（候補が取れた行だけ）
+        UPDATE r
+            SET r.jv_horse_id = nr.chosen_horse_id
+        FROM dbo.IF_Nk_RaceEntryRow r
+        INNER JOIN #NameResolve nr
+            ON nr.import_batch_id = r.import_batch_id
+           AND nr.row_no         = r.row_no
+        WHERE
+            r.import_batch_id = @import_batch_id
+            AND r.jv_horse_id IS NULL
+            AND nr.chosen_horse_id IS NOT NULL;
+
+        -- 参考：同名候補が複数あった件数をログに残す（処理は止めない）
+        DECLARE @name_resolved_count INT;
+        DECLARE @name_ambiguous_count INT;
+
+        SELECT @name_resolved_count = COUNT(*)
+        FROM #NameResolve
+        WHERE chosen_horse_id IS NOT NULL;
+
+        SELECT @name_ambiguous_count = COUNT(*)
+        FROM #NameResolve
+        WHERE chosen_horse_id IS NOT NULL
+          AND cand_count >= 2;
+
+        IF @name_resolved_count > 0
+        BEGIN
+            INSERT INTO dbo.IF_Nk_ApplyLog (import_batch_id, race_id, inserted_rows, message)
+            VALUES
+            (
+                @import_batch_id,
+                @race_id,
+                0,
+                CONCAT(
+                    N'INFO: 馬名→血統マスタで ', @name_resolved_count, N' 件補完しました',
+                    N'（同名候補>=2 は ', @name_ambiguous_count, N' 件。horse_id 降順TOP1採用）'
+                )
+            );
+        END
+
+        INSERT INTO dbo.MP_HorseId (nk_horse_id, jv_horse_id, source, confidence)
+        SELECT DISTINCT
+              r.nk_horse_id
+            , r.jv_horse_id
+            , 'sp'
+            , 60
+        FROM dbo.IF_Nk_RaceEntryRow r
+        WHERE
+            r.import_batch_id = @import_batch_id
+            AND r.nk_horse_id IS NOT NULL
+            AND r.jv_horse_id IS NOT NULL
+            AND NOT EXISTS
+            (
+                SELECT 1
+                FROM dbo.MP_HorseId m
+                WHERE m.nk_horse_id = r.nk_horse_id
+            );
 
         ------------------------------------------------------------
         -- 2) 未解決チェック（jv_horse_id が1つでもNULLなら展開しない）
