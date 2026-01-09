@@ -1,11 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Text;
+﻿using ImportRaceEntries.Netkeiba;
+using ImportRaceEntries.Netkeiba.Models;
 using KenshowLabo.Tools.Config;
 using Microsoft.Extensions.Configuration;
-using ImportRaceEntries.Netkeiba;
-using ImportRaceEntries.Netkeiba.Models;
+using System.Text;
 
 namespace ImportRaceEntries {
     /// <summary>
@@ -40,6 +37,9 @@ namespace ImportRaceEntries {
             string htmlDirFromConfig = AppConfigLoader.GetRequiredString(config, "ImportRaceEntries:HtmlDir");
             bool applyToTrFromConfig = GetBool(config, "ImportRaceEntries:ApplyToTr", false);
 
+            bool cleanupEnabled = GetBool(config, "ImportRaceEntries:IfCleanup:Enabled", false);
+            int keepDays = GetInt(config, "ImportRaceEntries:IfCleanup:KeepDays", 21);
+
             // ============================================
             // 3) 引数で上書き（任意）
             // ============================================
@@ -73,14 +73,48 @@ namespace ImportRaceEntries {
             IfNetkeibaRepository ifRepo = new IfNetkeibaRepository(options.ConnectionString);
 
             // ============================================
-            // 6) HTMLファイル列挙
+            // 5.5) IFテーブルの過去分掃除（任意）
             // ============================================
-            string[] files = Directory.GetFiles(options.HtmlDir, "*.html", SearchOption.TopDirectoryOnly);
+            if (cleanupEnabled) {
+                // KeepDays より古いデータを削除（正規化できていない残骸は scraped_at で落とす）
+                DateTime cutoffDate = DateTime.Today.AddDays(-keepDays);
+                DateTime cutoffScrapedAt = DateTime.Now.AddDays(-keepDays);
+
+                int deleted = ifRepo.CleanupOldIfData(cutoffDate, cutoffScrapedAt);
+                LogInfo("[CLEANUP] IF old rows deleted: " + deleted + " (keepDays=" + keepDays + ")");
+            }
+
+            // ============================================
+            // 6) HTMLファイル列挙（Fetch有効なら先に取得）
+            // ============================================
+            bool fetchEnabled = GetBool(config, "ImportRaceEntries:Fetch:Enabled", false);
+
+            string[] files;
+
+            if (fetchEnabled) {
+                NetkeibaHtmlFetcher fetcher = new NetkeibaHtmlFetcher(options.HtmlDir);
+                NetkeibaFetchSettings fetchSettings = NetkeibaFetchSettings.FromConfig(config);
+
+                string[] downloaded = fetcher.FetchAndSave(fetchSettings);
+
+                // 取得できた分だけ処理（0件ならフォールバックでローカルの*.htmlを処理）
+                if (downloaded.Length > 0) {
+                    files = downloaded;
+                    LogInfo("[FETCH] downloaded html files=" + downloaded.Length);
+                }
+                else {
+                    files = Directory.GetFiles(options.HtmlDir, "*.html", SearchOption.TopDirectoryOnly);
+                    LogInfo("[FETCH] no new files. fallback to local files count=" + files.Length);
+                }
+            }
+            else {
+                files = Directory.GetFiles(options.HtmlDir, "*.html", SearchOption.TopDirectoryOnly);
+            }
+
             if (files.Length == 0) {
                 LogInfo("HTMLファイルが見つかりません: " + options.HtmlDir);
                 return 0;
             }
-
             int okCount = 0;
             int skipCount = 0;
             int errorCount = 0;
@@ -220,6 +254,26 @@ namespace ImportRaceEntries {
             }
 
             return b;
+        }
+
+        /// <summary>
+        /// Int設定を取得します（未定義/不正値は defaultValue）。
+        /// </summary>
+        private static int GetInt(IConfiguration config, string key, int defaultValue) {
+            string? s = config[key];
+
+            if (string.IsNullOrWhiteSpace(s)) {
+                return defaultValue;
+            }
+
+            bool parsed;
+            parsed = int.TryParse(s, out int i);
+
+            if (!parsed) {
+                return defaultValue;
+            }
+
+            return i;
         }
 
         /// <summary>

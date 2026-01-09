@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
-using System.Text.RegularExpressions;
-using HtmlAgilityPack;
+﻿using HtmlAgilityPack;
 using ImportRaceEntries.Netkeiba.Models;
+using System.Text.RegularExpressions;
 
 namespace ImportRaceEntries.Netkeiba {
     /// <summary>
@@ -71,6 +67,22 @@ namespace ImportRaceEntries.Netkeiba {
             h.ScrapedAt = scrapedAt;
             h.SourceFile = sourceFile;
             h.SourceUrl = TryExtractSourceUrl(doc);
+
+            RaceExtraRaw x = ExtractRaceExtras(doc);
+
+            h.MeetingRaw = x.MeetingRaw;
+            h.TurnRaw = x.TurnRaw;
+            h.RaceClassRaw = x.RaceClassRaw;
+            h.HeadCountRaw = x.HeadCountRaw;
+
+            h.StartTimeRaw = x.StartTimeRaw;
+            h.TurnDirRaw = x.TurnDirRaw;
+            h.CourseRingRaw = x.CourseRingRaw;
+            h.CourseExRaw = x.CourseExRaw;
+            h.CourseDetailRaw = x.CourseDetailRaw;
+
+            h.SurfaceTypeRaw = x.SurfaceTypeRaw;
+            h.DistanceMRaw = x.DistanceMRaw;
 
             // ★ヘッダは og:title / title を最優先にする（ここが最重要）
             ApplyHeaderFromTitle(doc, h);
@@ -542,6 +554,137 @@ namespace ImportRaceEntries.Netkeiba {
             }
 
             return "芝" + dist + "m";
+        }
+
+        private static RaceExtraRaw ExtractRaceExtras(HtmlAgilityPack.HtmlDocument doc) {
+            RaceExtraRaw x = new RaceExtraRaw();
+
+            // =========================================================
+            // RaceData01 例: "15:45発走 / 芝1600m (右 外 C)"
+            // =========================================================
+            HtmlAgilityPack.HtmlNode? d1 = doc.DocumentNode.SelectSingleNode("//div[contains(@class,'RaceData01')]");
+            if (d1 != null) {
+                string t1 = NormalizeText(d1.InnerText);
+
+                // start time: 15:45
+                System.Text.RegularExpressions.Match tm = System.Text.RegularExpressions.Regex.Match(t1, @"\b(\d{1,2}:\d{2})\b");
+                if (tm.Success) {
+                    x.StartTimeRaw = tm.Groups[1].Value;
+                }
+
+                // surface + distance: 芝1600m / ダ1600m / ダート1600m
+                System.Text.RegularExpressions.Match sd = System.Text.RegularExpressions.Regex.Match(t1, @"(芝|ダート|ダ)\s*(\d{3,4})m");
+                if (sd.Success) {
+                    string surface = sd.Groups[1].Value;
+                    string dist = sd.Groups[2].Value;
+
+                    if (surface == "ダート" || surface == "ダ") {
+                        x.SurfaceTypeRaw = "ダ";
+                    }
+                    else {
+                        x.SurfaceTypeRaw = "芝";
+                    }
+
+                    x.DistanceMRaw = dist;
+                }
+
+                // course detail inside parentheses: (右 外 C)
+                System.Text.RegularExpressions.Match paren = System.Text.RegularExpressions.Regex.Match(t1, @"\((?<inside>[^)]+)\)");
+                if (paren.Success) {
+                    string inside = NormalizeText(paren.Groups["inside"].Value);
+                    x.CourseDetailRaw = inside;
+
+                    if (inside.Contains("右")) {
+                        x.TurnDirRaw = "右";
+                    }
+                    else if (inside.Contains("左")) {
+                        x.TurnDirRaw = "左";
+                    }
+
+                    // 内外（両方含むことは基本ない想定）
+                    if (inside.Contains("内")) {
+                        x.CourseRingRaw = "内";
+                    }
+                    else if (inside.Contains("外")) {
+                        x.CourseRingRaw = "外";
+                    }
+
+                    // A/B/C 等（単独の英大文字）
+                    System.Text.RegularExpressions.Match c = System.Text.RegularExpressions.Regex.Match(inside, @"\b([A-Z])\b");
+                    if (c.Success) {
+                        x.CourseExRaw = c.Groups[1].Value;
+                    }
+                }
+            }
+
+            // =========================================================
+            // RaceData02: span 群から meeting/turn/class/headcount
+            // =========================================================
+            HtmlAgilityPack.HtmlNode? d2 = doc.DocumentNode.SelectSingleNode("//div[contains(@class,'RaceData02')]");
+            if (d2 != null) {
+                List<HtmlAgilityPack.HtmlNode> spans =
+                    d2.SelectNodes(".//span")?.ToList()
+                    ?? new List<HtmlAgilityPack.HtmlNode>();
+
+                List<string> items = new List<string>();
+                foreach (HtmlAgilityPack.HtmlNode s in spans) {
+                    string text = NormalizeText(s.InnerText);
+                    if (!string.IsNullOrWhiteSpace(text)) {
+                        items.Add(text);
+                    }
+                }
+
+                // 期待並び: 1回 / 中山 / 4日目 / サラ系３歳 / オープン / ... / 20頭
+                if (items.Count >= 3) {
+                    // meeting_raw = "1回中山"
+                    x.MeetingRaw = items[0] + items[1];
+
+                    // turn_raw = "4日目"
+                    x.TurnRaw = items[2];
+                }
+
+                // head_count_raw: "20頭" -> "20"
+                foreach (string it in items) {
+                    System.Text.RegularExpressions.Match hm = System.Text.RegularExpressions.Regex.Match(it, @"(\d{1,2})頭");
+                    if (hm.Success) {
+                        x.HeadCountRaw = hm.Groups[1].Value;
+                        break;
+                    }
+                }
+
+                // race_class_raw: items[3] 以降を "頭数" の手前まで連結
+                // （まずは生文字列でOK。後で正規化ルールを詰める）
+                if (items.Count >= 4) {
+                    List<string> cls = new List<string>();
+
+                    for (int i = 3; i < items.Count; i++) {
+                        bool isHeadCount = System.Text.RegularExpressions.Regex.IsMatch(items[i], @"\d{1,2}頭");
+                        if (isHeadCount) {
+                            break;
+                        }
+
+                        cls.Add(items[i]);
+                    }
+
+                    x.RaceClassRaw = string.Join(" ", cls).Trim();
+                }
+            }
+
+            return x;
+        }
+
+        private sealed class RaceExtraRaw {
+            public string SurfaceTypeRaw { get; set; } = string.Empty; // 芝/ダ
+            public string DistanceMRaw { get; set; } = string.Empty;   // 1600
+            public string TurnDirRaw { get; set; } = string.Empty;     // 右/左
+            public string CourseRingRaw { get; set; } = string.Empty;  // 内/外
+            public string CourseExRaw { get; set; } = string.Empty;    // A/B/C
+            public string MeetingRaw { get; set; } = string.Empty;        // 例: "1回中山"
+            public string TurnRaw { get; set; } = string.Empty;           // 例: "4日目"
+            public string RaceClassRaw { get; set; } = string.Empty;      // 例: "サラ系３歳 オープン (国際) 牝(特指) 馬齢"
+            public string HeadCountRaw { get; set; } = string.Empty;      // 例: "20"
+            public string StartTimeRaw { get; set; } = string.Empty;      // 例: "15:45"
+            public string CourseDetailRaw { get; set; } = string.Empty;   // 例: "右 外 C"
         }
 
     }

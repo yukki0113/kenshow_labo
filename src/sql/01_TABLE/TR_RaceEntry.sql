@@ -13,10 +13,11 @@ CREATE TABLE dbo.TR_RaceEntry
     , race_date      DATE              NOT NULL
     , race_name      NVARCHAR(50)      NOT NULL
     , race_class     NVARCHAR(20)      NULL
+    , grade          NVARCHAR(4)       NULL  -- G1/G2/G3/JG1/L など
     , track_name     NVARCHAR(3)       NOT NULL
     , surface_type   NVARCHAR(10)      NOT NULL
     , distance_m     SMALLINT          NOT NULL
-    , meeting        NVARCHAR(12)      NULL
+    , meeting        NVARCHAR(20)      NULL
     , turn           NVARCHAR(1)       NULL
     , course_inout   NVARCHAR(1)       NULL
     , going          NVARCHAR(1)       NULL
@@ -33,6 +34,8 @@ CREATE TABLE dbo.TR_RaceEntry
     , carried_weight DECIMAL(3,1)      NULL
 
     -- 管理情報（軽量）
+    , race_name_raw  NVARCHAR(50)      NULL
+    , race_class_full NVARCHAR(100)    NULL
     , scraped_at     DATETIME2(0)      NOT NULL
                      CONSTRAINT DF_TR_RaceEntry_scraped_at DEFAULT (SYSDATETIME())
     , source_url     NVARCHAR(500)     NULL

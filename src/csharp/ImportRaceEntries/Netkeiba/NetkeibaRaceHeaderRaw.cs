@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace ImportRaceEntries.Netkeiba.Models {
+﻿namespace ImportRaceEntries.Netkeiba.Models {
     public sealed class NetkeibaRaceHeaderRaw {
         public Guid ImportBatchId { get; set; }
         public string RaceId { get; set; } = string.Empty;
@@ -12,9 +9,24 @@ namespace ImportRaceEntries.Netkeiba.Models {
         public string? TrackNameRaw { get; set; }
         public string? SurfaceDistanceRaw { get; set; }
 
+        public string MeetingRaw { get; set; } = string.Empty;
+        public string TurnRaw { get; set; } = string.Empty;
+        public string RaceClassRaw { get; set; } = string.Empty;
+        public string HeadCountRaw { get; set; } = string.Empty;
+
+        public string StartTimeRaw { get; set; } = string.Empty;
+        public string TurnDirRaw { get; set; } = string.Empty;
+        public string CourseRingRaw { get; set; } = string.Empty;
+        public string CourseExRaw { get; set; } = string.Empty;
+        public string CourseDetailRaw { get; set; } = string.Empty;
+
+        public string SurfaceTypeRaw { get; set; } = string.Empty;
+        public string DistanceMRaw { get; set; } = string.Empty;
+
         public DateTime ScrapedAt { get; set; }
         public string? SourceUrl { get; set; }
         public string? SourceFile { get; set; }
+        public DateTime CreatedAt { get; set; }
     }
 
     public sealed class NetkeibaRaceEntryRowRaw {

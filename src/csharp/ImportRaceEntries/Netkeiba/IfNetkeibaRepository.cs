@@ -1,9 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Data;
-using Microsoft.Data.SqlClient;
+﻿using ImportRaceEntries.Netkeiba.Models;
 using KenshowLabo.Tools.Db;
-using ImportRaceEntries.Netkeiba.Models;
+using Microsoft.Data.SqlClient;
+using System.Data;
 
 namespace ImportRaceEntries.Netkeiba {
     /// <summary>
@@ -41,6 +39,20 @@ namespace ImportRaceEntries.Netkeiba {
                 _connectionString,
                 (SqlConnection conn, SqlTransaction tx) => {
                     // 1) Header INSERT
+                    Console.WriteLine("[DEBUG] header before insert:"
+                        + " meeting=" + header.MeetingRaw
+                        + " turn=" + header.TurnRaw
+                        + " class=" + header.RaceClassRaw
+                        + " head=" + header.HeadCountRaw
+                        + " start=" + header.StartTimeRaw
+                        + " dir=" + header.TurnDirRaw
+                        + " ring=" + header.CourseRingRaw
+                        + " ex=" + header.CourseExRaw
+                        + " detail=" + header.CourseDetailRaw
+                        + " surface=" + header.SurfaceTypeRaw
+                        + " dist=" + header.DistanceMRaw
+                    );
+
                     InsertHeader(conn, tx, header);
 
                     // 2) Rows Bulk Insert
@@ -53,9 +65,8 @@ namespace ImportRaceEntries.Netkeiba {
         /// 取り込み後に IF→TR 展開ストアドを呼びます（任意）。
         /// </summary>
         public void ApplyToTr(Guid importBatchId) {
-            // ここは単独実行で十分（DB側で整合チェックしてSKIPする設計のため）
             DbUtil.ExecuteStoredProcedure(
-                _connectionString,
+                this._connectionString,
                 "dbo.sp_ApplyNetkeibaRaceEntry",
                 (SqlParameterCollection p) => {
                     p.Add(DbUtil.CreateParameter("@import_batch_id", SqlDbType.UniqueIdentifier, importBatchId));
@@ -69,33 +80,65 @@ namespace ImportRaceEntries.Netkeiba {
         /// </summary>
         private static void InsertHeader(SqlConnection conn, SqlTransaction tx, NetkeibaRaceHeaderRaw header) {
             const string sql = @"
-INSERT INTO dbo.IF_Nk_RaceHeader
-(
-      import_batch_id
-    , race_id
-    , race_no_raw
-    , race_date_raw
-    , race_name_raw
-    , track_name_raw
-    , surface_distance_raw
-    , scraped_at
-    , source_url
-    , source_file
-)
-VALUES
-(
-      @import_batch_id
-    , @race_id
-    , @race_no_raw
-    , @race_date_raw
-    , @race_name_raw
-    , @track_name_raw
-    , @surface_distance_raw
-    , @scraped_at
-    , @source_url
-    , @source_file
-);
-";
+                INSERT INTO dbo.IF_Nk_RaceHeader
+                (
+                      import_batch_id
+                    , race_id
+                    , race_no_raw
+                    , race_date_raw
+                    , race_name_raw
+                    , track_name_raw
+                    , surface_distance_raw
+                    , scraped_at
+                    , source_url
+                    , source_file
+                    , created_at
+
+                    -- 追加（RaceExtras）
+                    , meeting_raw
+                    , turn_raw
+                    , race_class_raw
+                    , head_count_raw
+
+                    , start_time_raw
+                    , turn_dir_raw
+                    , course_ring_raw
+                    , course_ex_raw
+                    , course_detail_raw
+
+                    , surface_type_raw
+                    , distance_m_raw
+                )
+                VALUES
+                (
+                      @import_batch_id
+                    , @race_id
+                    , @race_no_raw
+                    , @race_date_raw
+                    , @race_name_raw
+                    , @track_name_raw
+                    , @surface_distance_raw
+                    , @scraped_at
+                    , @source_url
+                    , @source_file
+                    , @created_at
+
+                    -- 追加（RaceExtras）
+                    , @meeting_raw
+                    , @turn_raw
+                    , @race_class_raw
+                    , @head_count_raw
+
+                    , @start_time_raw
+                    , @turn_dir_raw
+                    , @course_ring_raw
+                    , @course_ex_raw
+                    , @course_detail_raw
+
+                    , @surface_type_raw
+                    , @distance_m_raw
+                );
+                ";
 
             // DbUtil に実行を委譲（Repository側からSqlCommandを排除）
             DbUtil.ExecuteNonQuery(
@@ -113,8 +156,23 @@ VALUES
                     p.Add(DbUtil.CreateParameter("@scraped_at", SqlDbType.DateTime2, header.ScrapedAt));
                     p.Add(DbUtil.CreateParameter("@source_url", SqlDbType.NVarChar, header.SourceUrl));
                     p.Add(DbUtil.CreateParameter("@source_file", SqlDbType.NVarChar, header.SourceFile));
-                },
-                30
+                    p.Add(DbUtil.CreateParameter("@created_at", SqlDbType.DateTime2, DateTime.Now));
+
+                    // 追加（RaceExtras）
+                    p.Add(DbUtil.CreateParameter("@meeting_raw", SqlDbType.NVarChar, header.MeetingRaw));
+                    p.Add(DbUtil.CreateParameter("@turn_raw", SqlDbType.NVarChar, header.TurnRaw));
+                    p.Add(DbUtil.CreateParameter("@race_class_raw", SqlDbType.NVarChar, header.RaceClassRaw));
+                    p.Add(DbUtil.CreateParameter("@head_count_raw", SqlDbType.NVarChar, header.HeadCountRaw));
+
+                    p.Add(DbUtil.CreateParameter("@start_time_raw", SqlDbType.NVarChar, header.StartTimeRaw));
+                    p.Add(DbUtil.CreateParameter("@turn_dir_raw", SqlDbType.NVarChar, header.TurnDirRaw));
+                    p.Add(DbUtil.CreateParameter("@course_ring_raw", SqlDbType.NVarChar, header.CourseRingRaw));
+                    p.Add(DbUtil.CreateParameter("@course_ex_raw", SqlDbType.NVarChar, header.CourseExRaw));
+                    p.Add(DbUtil.CreateParameter("@course_detail_raw", SqlDbType.NVarChar, header.CourseDetailRaw));
+
+                    p.Add(DbUtil.CreateParameter("@surface_type_raw", SqlDbType.NVarChar, header.SurfaceTypeRaw));
+                    p.Add(DbUtil.CreateParameter("@distance_m_raw", SqlDbType.NVarChar, header.DistanceMRaw));
+                }, 30
             );
         }
 
@@ -185,5 +243,57 @@ VALUES
 
             return dt;
         }
+
+        public int CleanupOldIfData(DateTime cutoffDate, DateTime cutoffScrapedAt) {
+            const string sql = @"
+                ;WITH Target AS
+                (
+                    SELECT h.import_batch_id
+                    FROM dbo.IF_Nk_RaceHeader h
+                    WHERE
+                        (h.race_date_norm IS NOT NULL AND h.race_date_norm < @cutoffDate)
+                        OR
+                        (h.race_date_norm IS NULL AND h.scraped_at < @cutoffScrapedAt)
+                )
+                DELETE r
+                FROM dbo.IF_Nk_RaceEntryRow r
+                INNER JOIN Target t
+                    ON t.import_batch_id = r.import_batch_id;
+
+                ;WITH Target AS
+                (
+                    SELECT h.import_batch_id
+                    FROM dbo.IF_Nk_RaceHeader h
+                    WHERE
+                        (h.race_date_norm IS NOT NULL AND h.race_date_norm < @cutoffDate)
+                        OR
+                        (h.race_date_norm IS NULL AND h.scraped_at < @cutoffScrapedAt)
+                )
+                DELETE l
+                FROM dbo.IF_Nk_ApplyLog l
+                INNER JOIN Target t
+                    ON t.import_batch_id = l.import_batch_id;
+
+                DELETE h
+                FROM dbo.IF_Nk_RaceHeader h
+                WHERE
+                    (h.race_date_norm IS NOT NULL AND h.race_date_norm < @cutoffDate)
+                    OR
+                    (h.race_date_norm IS NULL AND h.scraped_at < @cutoffScrapedAt);
+                ";
+
+            int affected = DbUtil.ExecuteNonQuery(
+                this._connectionString,
+                sql,
+                (SqlParameterCollection p) => {
+                    p.Add(DbUtil.CreateParameter("@cutoffDate", SqlDbType.Date, cutoffDate.Date));
+                    p.Add(DbUtil.CreateParameter("@cutoffScrapedAt", SqlDbType.DateTime2, cutoffScrapedAt));
+                },
+                30
+            );
+
+            return affected;
+        }
+
     }
 }
