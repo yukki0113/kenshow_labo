@@ -77,3 +77,16 @@ GO
 CREATE INDEX IX_TR_RaceResult_HorseId
     ON dbo.TR_RaceResult (horse_id);
 GO
+
+-- 基準タイムマスタとの結合用
+CREATE INDEX IX_TR_RaceResult_StdTime 
+ON dbo.TR_RaceResult (jyo_cd, track_cd, distance_m)
+INCLUDE (finish_time);
+
+-- 日次集計用（日付と場所で検索するため）
+CREATE INDEX IX_TR_RaceResult_Daily
+ON dbo.TR_RaceResult (race_date, jyo_cd, baba_siba_cd, baba_dirt_cd);
+
+-- クラス結合用
+CREATE INDEX IX_TR_RaceResult_Class
+ON dbo.TR_RaceResult (jyoken_cd4);
