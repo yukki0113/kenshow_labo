@@ -53,8 +53,11 @@ SELECT
           ELSE b.race_name
       END AS [レース名]
 
-    , COALESCE(dclass.[text], b.jyoken_name) AS [クラス]
-    , dgrade.[text]                          AS [グレード]
+    , CASE 
+        WHEN b.grade_cd IN ('A', 'B', 'C', 'D', 'L') THEN dgrade.[text]
+        WHEN b.jyoken_cd4 = '701' THEN N'OP'
+        ELSE COALESCE(dclass.[text], b.jyoken_name)
+      END AS [クラス]
     , b.win5_flg                             AS WIN5_flg
 
     -- 表示系：VW_Track を優先（引けない場合だけフォールバック）
@@ -149,6 +152,11 @@ SELECT
     , b.grade_cd          AS grade_cd
     , b.jyoken_syubetu_cd AS jyoken_syubetu_cd
     , b.jyoken_cd4        AS jyoken_cd4
+    , CASE 
+        WHEN b.grade_cd IN ('A', 'B', 'C', 'D', 'L') THEN b.grade_cd
+        WHEN b.jyoken_cd4 = '701' THEN 'OP'
+        ELSE b.jyoken_cd4
+      END AS unified_class_cd -- クラス・グレード統合コード
     , b.track_cd          AS track_cd
     , b.weather_cd        AS weather_cd
     , b.baba_siba_cd      AS baba_siba_cd

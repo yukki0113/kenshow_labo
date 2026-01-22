@@ -17,6 +17,7 @@ namespace KenshowLabo.Tools.Models
         public string ClassName { get; set; }
         public string ClassSimple { get; set; }
         public bool Win5Flg { get; set; }
+        public string unified_class_cd { get; set; }
 
         public string Track { get; set; }
         public string Surface { get; set; }
@@ -86,6 +87,7 @@ namespace KenshowLabo.Tools.Models
             this.RaceName = string.Empty;
             this.ClassName = string.Empty;
             this.ClassSimple = string.Empty;
+            this.unified_class_cd = string.Empty;
 
             this.Track = string.Empty;
             this.Surface = string.Empty;
