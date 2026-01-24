@@ -14,15 +14,31 @@ CREATE TABLE dbo.TR_RacePredictionResult (
     horse_no             TINYINT       NOT NULL,
     horse_name           NVARCHAR(30)  NOT NULL,
     race_class           NVARCHAR(20)  NULL,
-    ability_last5_avg    DECIMAL(5,1)  NULL, -- 能力_近5走平均
-    momentum_score       DECIMAL(4,1)  NULL, -- 勢い値
-    aptitude_site_score  DECIMAL(4,1)  NULL, -- 適性_場所
-    aptitude_dist_score  DECIMAL(4,1)  NULL, -- 適性_距離
-    final_expected_score DECIMAL(5,1)  NULL, -- 最終期待値
-    career_count         INT           NULL, -- キャリア
-    site_experience_count INT           NULL, -- 場経
-    dist_experience_count INT           NULL, -- 距経
-    created_at           DATETIME      DEFAULT GETDATE(),
     
+    -- 表示用指数
+    ability_last5_avg    DECIMAL(5,1)  NULL,
+    momentum_score       DECIMAL(4,1)  NULL,
+    aptitude_site_score  DECIMAL(4,1)  NULL,
+    aptitude_dist_score  DECIMAL(4,1)  NULL,
+    final_expected_score DECIMAL(5,1)  NULL,
+    
+    -- 信頼度情報
+    career_count         INT           NULL,
+    site_experience_count INT           NULL,
+    dist_experience_count INT           NULL,
+    
+    -- 分析用詳細生スコア
+    raw_ability          DECIMAL(5,1)  NULL,
+    raw_momentum         DECIMAL(4,1)  NULL,
+    raw_site_apt         DECIMAL(4,1)  NULL,
+    raw_dist_apt         DECIMAL(4,1)  NULL,
+    raw_sire_apt         DECIMAL(4,1)  NULL,
+    raw_jockey_apt       DECIMAL(4,1)  NULL,
+    raw_waku_bias        DECIMAL(4,1)  NULL,
+    raw_going_apt        DECIMAL(4,1)  NULL,
+    raw_style_match      DECIMAL(4,1)  NULL,
+    
+    predicted_style      NVARCHAR(10)  NULL,
+    created_at           DATETIME      DEFAULT GETDATE(),
     CONSTRAINT PK_TR_RacePredictionResult PRIMARY KEY (race_id, horse_no)
 );

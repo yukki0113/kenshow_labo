@@ -7,11 +7,16 @@ GO
 CREATE TABLE dbo.MT_WeightConfig (
     config_id    INT PRIMARY KEY,
     config_name  NVARCHAR(50),
-    w_ability    DECIMAL(3,2), -- 基礎能力の重み
-    w_momentum   DECIMAL(3,2), -- 勢いの重み
-    w_aptitude   DECIMAL(3,2), -- 適性の重み
-    w_bias       DECIMAL(3,2), -- 枠順・環境の重み
-    is_active    BIT           -- 現在使用する設定
+    w_ability    DECIMAL(3,2) DEFAULT 1.0, -- 能力(近5)
+    w_momentum   DECIMAL(3,2) DEFAULT 1.0, -- 勢い
+    w_site       DECIMAL(3,2) DEFAULT 1.0, -- 場所適性(個体)
+    w_dist       DECIMAL(3,2) DEFAULT 1.0, -- 距離適性(個体)
+    w_sire       DECIMAL(3,2) DEFAULT 0.5, -- 血統(種牡馬)
+    w_jockey     DECIMAL(3,2) DEFAULT 0.8, -- 騎手
+    w_bias       DECIMAL(3,2) DEFAULT 1.0, -- 枠順
+    w_going      DECIMAL(3,2) DEFAULT 0.5, -- 馬場状態
+    w_style      DECIMAL(3,2) DEFAULT 0.5, -- 脚質マッチ
+    is_active    BIT DEFAULT 0
 );
 
-INSERT INTO dbo.MT_WeightConfig VALUES (1, N'デフォルト', 1.0, 1.0, 1.0, 1.0, 1);
+INSERT INTO dbo.MT_WeightConfig (config_id, config_name, is_active) VALUES (1, N'Default_V3', 1);
