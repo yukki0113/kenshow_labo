@@ -302,7 +302,7 @@ BEGIN
     FROM #BaseEx
     GROUP BY COALESCE(CONVERT(NVARCHAR(10), [枠番]), N'(不明)')
     HAVING COUNT(*) >= @min_starts
-    ORDER BY [1着] DESC, [2着] DESC, [3着] DESC, [出走数] DESC;
+    ORDER BY COALESCE(CONVERT(NVARCHAR(10), [枠番]), N'(不明)') ASC;
 
     /* ②追加：年齢別 */
     SELECT
@@ -420,6 +420,21 @@ BEGIN
         , SUM(CASE WHEN [着順] = 2 THEN 1 ELSE 0 END) AS [2着]
         , SUM(CASE WHEN [着順] = 3 THEN 1 ELSE 0 END) AS [3着]
         , SUM(CASE WHEN ISNULL([着順], 99) >= 4 THEN 1 ELSE 0 END) AS [着外]
+		, CAST(
+            ROUND(
+                CAST(SUM(CASE WHEN [着順] = 1 THEN 1 ELSE 0 END) AS DECIMAL(18, 6))
+                * 100.0
+                / NULLIF(CAST(COUNT(*) AS DECIMAL(18, 6)), 0)
+            , 1)
+        AS DECIMAL(5,1)) AS [勝率]
+        , CAST(
+            ROUND(
+                CAST(SUM(CASE WHEN [着順] IN (1,2,3) THEN 1 ELSE 0 END) AS DECIMAL(18, 6))
+                * 100.0
+                / NULLIF(CAST(COUNT(*) AS DECIMAL(18, 6)), 0)
+            , 1)
+        AS DECIMAL(5,1)) AS [複勝率]
+
     FROM #BaseEx
     GROUP BY
           CASE
