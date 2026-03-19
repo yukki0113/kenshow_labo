@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>検証ラボ - 条件別集計</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style_condition_stats.css" />
+</head>
+<body>
+  <header class="site-header">
+    <h1>検証ラボ</h1>
+    <p class="subtitle">条件別集計 / SQLite読込 / PWA</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>① SQLiteファイルを選択して読み込む</h2>
+
+      <div class="row wrap">
+        <input id="sqlite-file" type="file" accept=".sqlite,.db" />
+        <button id="btn-load" disabled>読み込む</button>
+      </div>
+
+      <div class="row">
+        <div id="db-status" class="muted">未ロード</div>
+      </div>
+
+      <details>
+        <summary>確認（件数）</summary>
+        <div class="row">
+          <button id="btn-counts" disabled>件数を確認</button>
+        </div>
+        <pre id="counts-output" class="pre"></pre>
+      </details>
+    </section>
+
+    <section class="card">
+      <h2>② 条件別集計</h2>
+
+      <div class="grid grid-3">
+        <label>
+          地域
+          <select id="f-region">
+            <option value="ALL">ALL</option>
+            <option value="CENTRAL">CENTRAL</option>
+            <option value="LOCAL">LOCAL</option>
+          </select>
+        </label>
+
+        <label>
+          期間 From
+          <input id="f-date-from" type="date" />
+        </label>
+
+        <label>
+          期間 To
+          <input id="f-date-to" type="date" />
+        </label>
+
+        <label>
+          場コード（カンマ区切り）
+          <input id="f-jyo" type="text" placeholder="05,06,09" />
+        </label>
+
+        <label>
+          グレード
+          <input id="f-grade" type="text" placeholder="G1 / G2 / G3 など" />
+        </label>
+
+        <label>
+          芝/ダ
+          <select id="f-surface">
+            <option value="">指定なし</option>
+            <option value="芝">芝</option>
+            <option value="ダ">ダ</option>
+          </select>
+        </label>
+
+        <label>
+          距離 From
+          <input id="f-distance-from" type="number" min="0" step="100" placeholder="1200" />
+        </label>
+
+        <label>
+          距離 To
+          <input id="f-distance-to" type="number" min="0" step="100" placeholder="2000" />
+        </label>
+
+        <label>
+          馬場
+          <input id="f-baba" type="text" placeholder="良 / 稍 / 重 / 不" />
+        </label>
+
+        <label>
+          レース名（部分一致）
+          <input id="f-race-name" type="text" placeholder="シンザン" />
+        </label>
+
+        <label>
+          WIN5
+          <select id="f-win5">
+            <option value="">指定なし</option>
+            <option value="0">いいえ</option>
+            <option value="1">はい</option>
+          </select>
+        </label>
+
+        <label>
+          最低出走数
+          <input id="f-min-starts" type="number" min="1" step="1" value="3" />
+        </label>
+      </div>
+
+      <div class="row wrap">
+        <button id="btn-run" disabled>集計実行</button>
+        <div id="run-status" class="muted"></div>
+      </div>
+
+      <div class="summary-grid">
+        <div class="summary-card">
+          <div class="summary-label">該当出走数</div>
+          <div id="summary-starts" class="summary-value">-</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">該当レース数</div>
+          <div id="summary-races" class="summary-value">-</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">該当頭数</div>
+          <div id="summary-horses" class="summary-value">-</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div id="applied-filters" class="muted">条件未実行</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>③ 集計結果</h2>
+
+      <div id="stat-tabs" class="tabs"></div>
+      <div id="stat-result" class="table-wrap muted">まだ集計されていません。</div>
+    </section>
+  </main>
+
+  <footer>
+    <small>kenshow_labo / 条件別集計モック</small>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/sql-wasm.js"></script>
+  <script src="app_condition_stats.js"></script>
+</body>
+</html>
