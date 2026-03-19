@@ -1,7 +1,40 @@
-# DB 接続情報（実物）はコミットしない
-src/scraping/dbconfig.json
-
+# =========================
+# Secrets / Local configs
+# =========================
 # もし .env などを使う場合はここに追加
 .env
 
-src\scraping\__pycache__
+# データ自体はコミットしない
+/local_data
+
+# =========================
+# SQL
+# =========================
+# 定義フォルダ
+src/sql/01_TABLE/定義/
+
+# =========================
+# C# / .NET (Visual Studio / VS Code)
+# =========================
+
+# build outputs
+**/bin/
+**/obj/
+
+# Visual Studio folder
+.vs/
+
+# user-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# NuGet（通常は packages は不要。PackageReferenceなら自動復元）
+packages/
+
+# =========================
+# OS
+# =========================
+.DS_Store
+Thumbs.db
