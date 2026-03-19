@@ -73,17 +73,25 @@ namespace ImportRaceEntries.Netkeiba {
             // 4) 未解決警告（トランザクション外でOK）
             // ============================================
             foreach (NetkeibaRaceEntryRowRaw r in rows) {
-                if (string.IsNullOrWhiteSpace(r.NkHorseId)) {
+                if (string.IsNullOrWhiteSpace(r.NkHorseId))
+                {
                     continue;
                 }
 
-                if (!string.IsNullOrWhiteSpace(r.JvHorseId)) {
+                // すでに解決済みならスキップ
+                if (!string.IsNullOrWhiteSpace(r.JvHorseId))
+                {
                     continue;
                 }
 
-                string msg = "jv_horse_id unresolved: nk_horse_id=" + r.NkHorseId
-                             + " horse_name=" + (r.HorseNameRaw ?? "null");
+                // 未解決の場合、警告ログに残しつつ、NULLのまま通過させる
+                string msg = "jv_horse_id 未解決（マスタ未登録）: nk_horse_id=" + r.NkHorseId
+                             + " horse_name=" + (r.HorseNameRaw ?? "null")
+                             + " -> NULLとして登録します";
                 warnings.Add(msg);
+
+                // DB側で NULL を許可していれば、これで登録されます
+                r.JvHorseId = null;
             }
 
             return warnings;
@@ -115,10 +123,10 @@ namespace ImportRaceEntries.Netkeiba {
             string inClause = BuildInClause("@nk", nkList.Count);
 
             string sql = @"
-SELECT m.nk_horse_id, m.jv_horse_id
-FROM dbo.MP_HorseId AS m
-WHERE m.nk_horse_id IN " + inClause + @";
-";
+                SELECT m.nk_horse_id, m.jv_horse_id
+                FROM dbo.MP_HorseId AS m
+                WHERE m.nk_horse_id IN " + inClause + @";
+            ";
 
             List<NkJvRow> list = DbUtil.QueryToList<NkJvRow>(
                 conn,
@@ -201,10 +209,10 @@ WHERE m.nk_horse_id IN " + inClause + @";
             string inClause = BuildInClause("@nm", nameList.Count);
 
             string sql = @"
-SELECT p.horse_name, p.horse_id
-FROM dbo.MT_HorsePedigree AS p
-WHERE p.horse_name IN " + inClause + @";
-";
+                SELECT p.horse_name, p.horse_id
+                FROM dbo.MT_HorsePedigree AS p
+                WHERE p.horse_name IN " + inClause + @";
+            ";
 
             List<NameJvRow> list = DbUtil.QueryToList<NameJvRow>(
                 conn,
@@ -299,14 +307,14 @@ WHERE p.horse_name IN " + inClause + @";
         private static void BulkUpsertMappings(SqlConnection conn, SqlTransaction tx, List<HorseIdUpsertItem> upserts) {
             // 一時テーブル作成
             const string createSql = @"
-CREATE TABLE #TmpHorseIdMap
-(
-      nk_horse_id  CHAR(10)     NOT NULL
-    , jv_horse_id  CHAR(10)     NOT NULL
-    , source       NVARCHAR(20) NOT NULL
-    , confidence   TINYINT      NOT NULL
-);
-";
+            CREATE TABLE #TmpHorseIdMap
+                (
+                      nk_horse_id  CHAR(10)     NOT NULL
+                    , jv_horse_id  CHAR(10)     NOT NULL
+                    , source       NVARCHAR(20) NOT NULL
+                    , confidence   TINYINT      NOT NULL
+                );
+            ";
 
             DbUtil.ExecuteNonQuery(
                 conn,
@@ -350,19 +358,19 @@ CREATE TABLE #TmpHorseIdMap
 
             // MERGEでUPSERT
             const string mergeSql = @"
-MERGE dbo.MP_HorseId AS tgt
-USING #TmpHorseIdMap AS src
-    ON tgt.nk_horse_id = src.nk_horse_id
-WHEN MATCHED THEN
-    UPDATE SET
-          tgt.jv_horse_id = src.jv_horse_id
-        , tgt.source      = src.source
-        , tgt.confidence  = src.confidence
-        , tgt.updated_at  = SYSDATETIME()
-WHEN NOT MATCHED THEN
-    INSERT (nk_horse_id, jv_horse_id, source, confidence, created_at, updated_at)
-    VALUES (src.nk_horse_id, src.jv_horse_id, src.source, src.confidence, SYSDATETIME(), SYSDATETIME());
-";
+                MERGE dbo.MP_HorseId AS tgt
+                USING #TmpHorseIdMap AS src
+                    ON tgt.nk_horse_id = src.nk_horse_id
+                WHEN MATCHED THEN
+                    UPDATE SET
+                          tgt.jv_horse_id = src.jv_horse_id
+                        , tgt.source      = src.source
+                        , tgt.confidence  = src.confidence
+                        , tgt.updated_at  = SYSDATETIME()
+                WHEN NOT MATCHED THEN
+                    INSERT (nk_horse_id, jv_horse_id, source, confidence, created_at, updated_at)
+                    VALUES (src.nk_horse_id, src.jv_horse_id, src.source, src.confidence, SYSDATETIME(), SYSDATETIME());
+            ";
 
             DbUtil.ExecuteNonQuery(
                 conn,

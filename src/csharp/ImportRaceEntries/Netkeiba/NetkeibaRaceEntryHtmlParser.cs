@@ -415,11 +415,23 @@ namespace ImportRaceEntries.Netkeiba {
             return string.Empty;
         }
 
-        private static string? TryExtractSurfaceDistanceRaw(HtmlDocument doc) {
-            // 例: 芝2500m / ダ1800m などを本文から拾う
+        private static string? TryExtractSurfaceDistanceRaw(HtmlDocument doc)
+        {
+            // 例: 芝2500m / ダ1800m / 障3000m / 芝外1600m などを本文から拾う
             string text = NormalizeText(doc.DocumentNode.InnerText);
-            Match m = Regex.Match(text, @"(芝|ダート|ダ)\s*(\d{3,4})m");
-            if (m.Success) {
+
+            // 修正版正規表現:
+            // 1. (芝|ダート|ダ|障) -> 障害レースを追加
+            // 2. (?:[外内]?[左右]?[回]?)? -> 「外」「内」「右」「左」「2回」などの付帯情報を無視してマッチさせる
+            // 3. \s* -> 空白許容
+            // 4. (\d{3,4}) -> 距離
+            Match m = Regex.Match(text, @"(芝|ダート|ダ|障)(?:[外内]?[左右]?[回]?)?\s*(\d{3,4})m");
+
+            if (m.Success)
+            {
+                // マッチした「芝/ダ/障」と「距離」を結合して返す
+                // m.Groups[1] は (芝|ダート|ダ|障)
+                // m.Groups[2] は (\d{3,4})
                 return m.Groups[1].Value + m.Groups[2].Value + "m";
             }
 

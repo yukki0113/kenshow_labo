@@ -87,7 +87,26 @@ namespace ImportRaceEntries {
             // ============================================
             // 6) HTMLファイル列挙（Fetch有効なら先に取得）
             // ============================================
+
             bool fetchEnabled = GetBool(config, "ImportRaceEntries:Fetch:Enabled", false);
+
+            if (Directory.Exists(options.HtmlDir))
+            {
+                try
+                {
+                    LogInfo("[CLEANUP] Cleaning up old HTML files in: " + options.HtmlDir);
+                    string[] oldFiles = Directory.GetFiles(options.HtmlDir, "*.html");
+                    foreach (string oldFile in oldFiles)
+                    {
+                        File.Delete(oldFile);
+                    }
+                    LogInfo("[CLEANUP] Deleted " + oldFiles.Length + " files.");
+                }
+                catch (Exception ex)
+                {
+                    LogWarn("[CLEANUP] Failed to clean up directory: " + ex.Message);
+                }
+            }
 
             string[] files;
 
