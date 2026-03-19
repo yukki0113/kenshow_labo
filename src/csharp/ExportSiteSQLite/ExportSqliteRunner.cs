@@ -417,4 +417,35 @@ namespace ExportSiteSQLite
         public string? Dam { get; set; }
         public string? SireSire { get; set; }
     }
+
+    public sealed class ConditionStatsBaseRow
+    {
+        public string Region { get; set; } = string.Empty;
+        public string RaceId { get; set; } = string.Empty;
+        public string? HorseId { get; set; }
+        public int? Umaban { get; set; }
+        public string RaceDate { get; set; } = string.Empty;
+        public string? RaceName { get; set; }
+        public string? JyoCd { get; set; }
+        public string? GradeCd { get; set; }
+        public int Win5Flg { get; set; }
+        public string? Surface { get; set; }
+        public int? DistanceM { get; set; }
+        public string? BabaText { get; set; }
+        public int? Wakuban { get; set; }
+        public string? JockeyName { get; set; }
+        public string? SireName { get; set; }
+        public string? RunningStyle { get; set; }
+        public int? FinishPos { get; set; }
+        public string? Sex { get; set; }
+        public int? Age { get; set; }
+        public int? Popularity { get; set; }
+        public decimal? WeightCarried { get; set; }
+        public int? HorseWeight { get; set; }
+        public int? PayoutWinYen { get; set; }
+        public int? PayoutPlaceYen { get; set; }
+        public string? PrevClass { get; set; }
+        public int? PrevDistanceM { get; set; }
+        public string? DistanceChange { get; set; }
+    }
 }
