@@ -43,58 +43,77 @@ namespace ExportSiteSQLite
                 using (SqliteTransaction tx = sqlite.BeginTransaction())
                 {
                     // ============================================
-                    // 1) dim_race（history）
+                    // 初版: fact_condition_stats_base のみを生成する
+                    // 旧 export メソッド群は当面残すが、この Run では呼ばない
                     // ============================================
-                    DimRaceRow[] dimHistory = ReadDimRaceHistory(options);
-                    SqliteWriters.InsertDimRaceHistory(sqlite, tx, dimHistory);
-
-                    // ============================================
-                    // 2) dim_race（weekend）UPSERT
-                    // ============================================
-                    DimRaceRow[] dimWeekend = ReadDimRaceWeekend(options);
-                    SqliteWriters.UpsertDimRaceWeekend(sqlite, tx, dimWeekend);
-
-                    // ============================================
-                    // 3) result（history）
-                    // ============================================
-                    RaceResultRow[] results = ReadRaceResultsHistory(options);
-                    SqliteWriters.InsertRaceResults(sqlite, tx, results);
-
-                    // ============================================
-                    // 4) payout（history）
-                    // ============================================
-                    if (options.IncludePayout)
-                    {
-                        PayoutRow[] payouts = ReadPayoutsHistory(options);
-                        SqliteWriters.InsertPayouts(sqlite, tx, payouts);
-                    }
-
-                    // ============================================
-                    // 5) entry（weekend）
-                    // ============================================
-                    RaceEntryRow[] entries = ReadRaceEntriesWeekend(options);
-                    SqliteWriters.InsertRaceEntries(sqlite, tx, entries);
-
-                    // ============================================
-                    // 6) expectation（weekend）
-                    // ============================================
-                    ExpectationRow[] exp = ReadExpectationsWeekend(options);
-                    SqliteWriters.InsertExpectations(sqlite, tx, exp);
-
-                    // ============================================
-                    // 7) pedigree（weekend horses only）
-                    // ============================================
-                    if (options.IncludePedigreeWeekendOnly)
-                    {
-                        PedigreeRow[] peds = ReadPedigreeWeekendOnly(options);
-                        SqliteWriters.InsertPedigrees(sqlite, tx, peds);
-                    }
+                    ConditionStatsBaseRow[] statsBaseRows = ReadConditionStatsBaseCentral(options);
+                    SqliteWriters.InsertConditionStatsBaseRows(sqlite, tx, statsBaseRows);
 
                     tx.Commit();
                 }
 
                 ExecuteNonQuery(sqlite, "ANALYZE;");
             }
+        }
+
+        /// <summary>
+        /// fact_condition_stats_base（初版: 中央VIEWのみ）抽出。
+        /// </summary>
+        private static ConditionStatsBaseRow[] ReadConditionStatsBaseCentral(ProgramOptions options)
+        {
+            System.Collections.Generic.List<ConditionStatsBaseRow> list = DbUtil.QueryToList(
+                options.ConnectionString,
+                SqlServerQueries.ConditionStatsBaseCentral,
+                delegate (SqlParameterCollection p)
+                {
+                    p.Add(DbUtil.CreateParameter("@from_date", SqlDbType.Date, options.HistoryFromDate));
+                    p.Add(DbUtil.CreateParameter("@to_date", SqlDbType.Date, options.HistoryToDate));
+                    p.Add(DbUtil.CreateParameter("@jyo_cds", SqlDbType.NVarChar, options.HistoryJyoCdsCsv));
+                },
+                delegate (SqlDataReader r)
+                {
+                    ConditionStatsBaseRow row = new ConditionStatsBaseRow();
+
+                    // 列順は DDL / ConditionStatsBaseCentral / ConditionStatsBaseRow と厳密一致させる。
+                    row.RaceId = r.GetString(0);
+                    row.Umaban = r.GetInt32(1);
+                    row.HorseId = r.IsDBNull(2) ? null : r.GetString(2);
+                    row.RaceDate = r.GetString(3);
+                    row.JyoCd = r.GetString(4);
+                    row.RaceNo = r.GetInt32(5);
+
+                    // 表示系や派生列は VIEW 側で NULL 混在があり得るため、string は明示的に NULL 許容で読む。
+                    row.RaceName = r.IsDBNull(6) ? null : r.GetString(6);
+                    row.ClassName = r.IsDBNull(7) ? null : r.GetString(7);
+                    row.GradeCd = r.IsDBNull(8) ? null : r.GetString(8);
+                    row.Win5Flg = r.GetInt32(9);
+                    row.Surface = r.IsDBNull(10) ? null : r.GetString(10);
+                    row.DistanceM = r.IsDBNull(11) ? (int?)null : r.GetInt32(11);
+                    row.BabaText = r.IsDBNull(12) ? null : r.GetString(12);
+                    row.Wakuban = r.IsDBNull(13) ? (int?)null : r.GetInt32(13);
+                    row.JockeyName = r.IsDBNull(14) ? null : r.GetString(14);
+                    row.SireName = r.IsDBNull(15) ? null : r.GetString(15);
+                    row.RunningStyle = r.IsDBNull(16) ? null : r.GetString(16);
+                    row.FinishPos = r.IsDBNull(17) ? (int?)null : r.GetInt32(17);
+                    row.Sex = r.IsDBNull(18) ? null : r.GetString(18);
+                    row.Age = r.IsDBNull(19) ? (int?)null : r.GetInt32(19);
+                    row.Popularity = r.IsDBNull(20) ? (int?)null : r.GetInt32(20);
+
+                    // decimal / int / string それぞれ DBNull を分けて扱う。
+                    row.WeightCarried = r.IsDBNull(21) ? (decimal?)null : r.GetDecimal(21);
+                    row.HorseWeight = r.IsDBNull(22) ? (int?)null : r.GetInt32(22);
+                    row.PayoutWinYen = r.IsDBNull(23) ? (int?)null : r.GetInt32(23);
+                    row.PayoutPlaceYen = r.IsDBNull(24) ? (int?)null : r.GetInt32(24);
+
+                    // horse_id NULL / 前走なし / 距離不明では prev_* は NULL になり得る。
+                    row.PrevClass = r.IsDBNull(25) ? null : r.GetString(25);
+                    row.PrevDistanceM = r.IsDBNull(26) ? (int?)null : r.GetInt32(26);
+                    row.DistanceChange = r.IsDBNull(27) ? null : r.GetString(27);
+                    return row;
+                },
+                180);
+
+            return list.ToArray();
         }
 
         /// <summary>
@@ -420,13 +439,16 @@ namespace ExportSiteSQLite
 
     public sealed class ConditionStatsBaseRow
     {
-        public string Region { get; set; } = string.Empty;
+        // 初版は集計再現優先のため、DDLと同じ責務・同じ列順で定義する。
+        // horse_name は初版不要のため持たず、class_name/race_no は表示・検証補助として保持する。
         public string RaceId { get; set; } = string.Empty;
+        public int Umaban { get; set; }
         public string? HorseId { get; set; }
-        public int? Umaban { get; set; }
         public string RaceDate { get; set; } = string.Empty;
+        public string JyoCd { get; set; } = string.Empty;
+        public int RaceNo { get; set; }
         public string? RaceName { get; set; }
-        public string? JyoCd { get; set; }
+        public string? ClassName { get; set; }
         public string? GradeCd { get; set; }
         public int Win5Flg { get; set; }
         public string? Surface { get; set; }

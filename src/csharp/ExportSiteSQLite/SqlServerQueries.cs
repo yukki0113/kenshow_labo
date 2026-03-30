@@ -6,6 +6,126 @@
     public static class SqlServerQueries
     {
         /// <summary>
+        /// 初版PWA向けの条件別集計ベース。
+        /// 中央VIEWのみを対象に、SQLiteへ持ち出す母集団を先に確定し、
+        /// その horse_id 群に対してだけ前走参照をかけて 1出走1行で返す。
+        /// </summary>
+        public const string ConditionStatsBaseCentral = @"
+            WITH Base AS
+            (
+                SELECT
+                    /* DDL/ConditionStatsBaseRow と同じ列順で返す */
+                      v.race_id                                   AS race_id
+                    , CAST(v.[馬番] AS int)                        AS umaban
+                    , CAST(v.horse_id AS nvarchar(32))             AS horse_id
+                    , CONVERT(char(10), v.[日付], 23)              AS race_date
+                    , v.jyo_cd                                     AS jyo_cd
+                    , CAST(v.race_no AS int)                       AS race_no
+                    , v.[レース名]                                 AS race_name
+                    , v.[クラス]                                   AS class_name
+                    , v.grade_cd                                   AS grade_cd
+                    , ISNULL(TRY_CONVERT(int, v.WIN5_flg), 0)      AS win5_flg
+                    , v.[芝/ダ]                                    AS surface
+                    , TRY_CONVERT(int, v.[距離])                   AS distance_m
+                    , v.[馬場]                                     AS baba_text
+                    , TRY_CONVERT(int, v.[枠番])                   AS wakuban
+                    , v.[騎手]                                     AS jockey_name
+                    , v.[父]                                       AS sire_name
+                    , v.[脚質]                                     AS running_style
+                    , TRY_CONVERT(int, v.[着順])                   AS finish_pos
+                    , v.[性]                                       AS sex
+                    , TRY_CONVERT(int, v.[齢])                     AS age
+                    , TRY_CONVERT(int, v.[人気])                   AS popularity
+                    , TRY_CONVERT(decimal(4,1), v.[斤量])           AS weight_carried
+                    , TRY_CONVERT(int, v.[馬体重])                 AS horse_weight
+                    , TRY_CONVERT(int, v.[単勝払戻])               AS payout_win_yen
+                    , TRY_CONVERT(int, v.[複勝払戻])               AS payout_place_yen
+                FROM dbo.VW_RaceResultContract AS v
+                WHERE v.[日付] BETWEEN @from_date AND @to_date
+                  AND v.jyo_cd IN (SELECT LTRIM(RTRIM(value)) FROM STRING_SPLIT(@jyo_cds, ','))
+            ),
+            HorseList AS
+            (
+                /* 前走参照は Base に含まれる horse_id 群だけを対象にして不要走査を抑える */
+                SELECT DISTINCT
+                    b.horse_id
+                FROM Base AS b
+                WHERE b.horse_id IS NOT NULL
+            ),
+            Hist AS
+            (
+                /* 前走は対象期間外にもあり得るため下限では絞らない。
+                   ただし Base の horse_id 群だけに限定し、上限は @to_date までに抑える。 */
+                SELECT
+                      CAST(v.horse_id AS nvarchar(32))             AS horse_id
+                    , v.race_id                                     AS race_id
+                    , CONVERT(char(10), v.[日付], 23)              AS race_date
+                    , v.[クラス]                                   AS class_name
+                    , TRY_CONVERT(int, v.[距離])                   AS distance_m
+                FROM dbo.VW_RaceResultContract AS v
+                WHERE v.horse_id IN (SELECT horse_id FROM HorseList)
+                  AND v.[日付] <= @to_date
+            )
+            SELECT
+                  b.race_id
+                , b.umaban
+                , b.horse_id
+                , b.race_date
+                , b.jyo_cd
+                , b.race_no
+                , b.race_name
+                , b.class_name
+                , b.grade_cd
+                , b.win5_flg
+                , b.surface
+                , b.distance_m
+                , b.baba_text
+                , b.wakuban
+                , b.jockey_name
+                , b.sire_name
+                , b.running_style
+                , b.finish_pos
+                , b.sex
+                , b.age
+                , b.popularity
+                , b.weight_carried
+                , b.horse_weight
+                , b.payout_win_yen
+                , b.payout_place_yen
+                , prev.class_name                                 AS prev_class
+                , prev.distance_m                                 AS prev_distance_m
+                , CASE
+                    /* horse_id が NULL、前走なし、距離不明のいずれかでは距離変化も不明 */
+                    WHEN prev.distance_m IS NULL OR b.distance_m IS NULL THEN NULL
+                    WHEN b.distance_m > prev.distance_m THEN N'延長'
+                    WHEN b.distance_m < prev.distance_m THEN N'短縮'
+                    ELSE N'同距離'
+                  END                                             AS distance_change
+            FROM Base AS b
+            OUTER APPLY
+            (
+                SELECT TOP (1)
+                      h.class_name
+                    , h.distance_m
+                FROM Hist AS h
+                WHERE h.horse_id = b.horse_id
+                  /* 同日複数レースは race_id の大小で既存ストアド準拠の tie-break を行う */
+                  AND (
+                        h.race_date < b.race_date
+                     OR (h.race_date = b.race_date AND h.race_id < b.race_id)
+                  )
+                ORDER BY
+                      h.race_date DESC
+                    , h.race_id   DESC
+            ) AS prev
+            ORDER BY
+                  b.race_date
+                , b.jyo_cd
+                , b.race_no
+                , b.umaban;
+        ";
+
+        /// <summary>
         /// dim_race（過去：結果あり）を VW_RaceResultContract から作る。
         /// </summary>
         public const string DimRaceHistory = @"

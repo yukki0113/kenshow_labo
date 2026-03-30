@@ -12,40 +12,42 @@ namespace ExportSiteSQLite
         /// </summary>
         public void CreateSchema(SqliteConnection conn)
         {
+            /* 初版は中央VIEWのみを対象に、PWAの条件/集計/前走比較に必要な列だけを保持する。
+               horse_name は初版不要のため持たず、class_name と race_no は表示/検証補助として保持する。 */
             Execute(conn, @"
                 CREATE TABLE fact_condition_stats_base (
-                    region            TEXT NOT NULL,
                     race_id           TEXT NOT NULL,
-                    horse_id          TEXT,
-                    umaban            INTEGER,
+                    umaban            INTEGER NOT NULL,
+                    horse_id          TEXT NULL,
                     race_date         TEXT NOT NULL,
-                    race_name         TEXT,
-                    jyo_cd            TEXT,
-                    grade_cd          TEXT,
-                    WIN5_flg          INTEGER,
-                    surface           TEXT,
-                    distance_m        INTEGER,
-                    baba_text         TEXT,
-                    wakuban           INTEGER,
-                    jockey_name       TEXT,
-                    sire_name         TEXT,
-                    running_style     TEXT,
-                    finish_pos        INTEGER,
-                    sex               TEXT,
-                    age               INTEGER,
-                    popularity        INTEGER,
-                    weight_carried    REAL,
-                    horse_weight      INTEGER,
-                    payout_win_yen    INTEGER,
-                    payout_place_yen  INTEGER,
-                    prev_class        TEXT,
-                    prev_distance_m   INTEGER,
-                    distance_change   TEXT,
-                    PRIMARY KEY (race_id, horse_id)
-                    );"
-                );
-
-            Execute(conn, "CREATE INDEX idx_fcsb_filter ON fact_condition_stats_base (race_date, jyo_cd, surface, distance_m, grade_cd, WIN5_flg);");
+                    jyo_cd            TEXT NOT NULL,
+                    race_no           INTEGER NOT NULL,
+                    race_name         TEXT NULL,
+                    class_name        TEXT NULL,
+                    grade_cd          TEXT NULL,
+                    win5_flg          INTEGER NOT NULL DEFAULT 0,
+                    surface           TEXT NULL,
+                    distance_m        INTEGER NULL,
+                    baba_text         TEXT NULL,
+                    wakuban           INTEGER NULL,
+                    jockey_name       TEXT NULL,
+                    sire_name         TEXT NULL,
+                    running_style     TEXT NULL,
+                    finish_pos        INTEGER NULL,
+                    sex               TEXT NULL,
+                    age               INTEGER NULL,
+                    popularity        INTEGER NULL,
+                    weight_carried    REAL NULL,
+                    horse_weight      INTEGER NULL,
+                    payout_win_yen    INTEGER NULL,
+                    payout_place_yen  INTEGER NULL,
+                    prev_class        TEXT NULL,
+                    prev_distance_m   INTEGER NULL,
+                    distance_change   TEXT NULL,
+                    PRIMARY KEY (race_id, umaban)
+            );");
+            
+            Execute(conn, "CREATE INDEX idx_fcsb_filter ON fact_condition_stats_base (race_date, jyo_cd, surface, distance_m, grade_cd, win5_flg);");
             Execute(conn, "CREATE INDEX idx_fcsb_race_name ON fact_condition_stats_base (race_name);");
             Execute(conn, "CREATE INDEX idx_fcsb_jockey ON fact_condition_stats_base (jockey_name);");
             Execute(conn, "CREATE INDEX idx_fcsb_sire ON fact_condition_stats_base (sire_name);");
