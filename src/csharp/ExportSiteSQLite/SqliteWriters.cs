@@ -9,6 +9,89 @@ namespace ExportSiteSQLite
     public static class SqliteWriters
     {
         /// <summary>
+        /// fact_condition_stats_base をINSERTする。
+        /// PK重複時は既存方針どおり例外で検知するため、UPSERT は行わない。
+        /// </summary>
+        public static void InsertConditionStatsBaseRows(SqliteConnection conn, SqliteTransaction tx, ConditionStatsBaseRow[] rows)
+        {
+            using (SqliteCommand cmd = conn.CreateCommand())
+            {
+                cmd.Transaction = tx;
+                cmd.CommandText = @"
+                    INSERT INTO fact_condition_stats_base
+                    (race_id, umaban, horse_id, race_date, jyo_cd, race_no, race_name, class_name, grade_cd, win5_flg, surface, distance_m, baba_text, wakuban, jockey_name, sire_name, running_style, finish_pos, sex, age, popularity, weight_carried, horse_weight, payout_win_yen, payout_place_yen, prev_class, prev_distance_m, distance_change)
+                    VALUES
+                    (@race_id, @umaban, @horse_id, @race_date, @jyo_cd, @race_no, @race_name, @class_name, @grade_cd, @win5_flg, @surface, @distance_m, @baba_text, @wakuban, @jockey_name, @sire_name, @running_style, @finish_pos, @sex, @age, @popularity, @weight_carried, @horse_weight, @payout_win_yen, @payout_place_yen, @prev_class, @prev_distance_m, @distance_change);";
+
+                cmd.Parameters.Add(new SqliteParameter("@race_id", SqliteType.Text));
+                cmd.Parameters.Add(new SqliteParameter("@umaban", SqliteType.Integer));
+                cmd.Parameters.Add(new SqliteParameter("@horse_id", SqliteType.Text));
+                cmd.Parameters.Add(new SqliteParameter("@race_date", SqliteType.Text));
+                cmd.Parameters.Add(new SqliteParameter("@jyo_cd", SqliteType.Text));
+                cmd.Parameters.Add(new SqliteParameter("@race_no", SqliteType.Integer));
+                cmd.Parameters.Add(new SqliteParameter("@race_name", SqliteType.Text));
+                cmd.Parameters.Add(new SqliteParameter("@class_name", SqliteType.Text));
+                cmd.Parameters.Add(new SqliteParameter("@grade_cd", SqliteType.Text));
+                cmd.Parameters.Add(new SqliteParameter("@win5_flg", SqliteType.Integer));
+                cmd.Parameters.Add(new SqliteParameter("@surface", SqliteType.Text));
+                cmd.Parameters.Add(new SqliteParameter("@distance_m", SqliteType.Integer));
+                cmd.Parameters.Add(new SqliteParameter("@baba_text", SqliteType.Text));
+                cmd.Parameters.Add(new SqliteParameter("@wakuban", SqliteType.Integer));
+                cmd.Parameters.Add(new SqliteParameter("@jockey_name", SqliteType.Text));
+                cmd.Parameters.Add(new SqliteParameter("@sire_name", SqliteType.Text));
+                cmd.Parameters.Add(new SqliteParameter("@running_style", SqliteType.Text));
+                cmd.Parameters.Add(new SqliteParameter("@finish_pos", SqliteType.Integer));
+                cmd.Parameters.Add(new SqliteParameter("@sex", SqliteType.Text));
+                cmd.Parameters.Add(new SqliteParameter("@age", SqliteType.Integer));
+                cmd.Parameters.Add(new SqliteParameter("@popularity", SqliteType.Integer));
+                cmd.Parameters.Add(new SqliteParameter("@weight_carried", SqliteType.Real));
+                cmd.Parameters.Add(new SqliteParameter("@horse_weight", SqliteType.Integer));
+                cmd.Parameters.Add(new SqliteParameter("@payout_win_yen", SqliteType.Integer));
+                cmd.Parameters.Add(new SqliteParameter("@payout_place_yen", SqliteType.Integer));
+                cmd.Parameters.Add(new SqliteParameter("@prev_class", SqliteType.Text));
+                cmd.Parameters.Add(new SqliteParameter("@prev_distance_m", SqliteType.Integer));
+                cmd.Parameters.Add(new SqliteParameter("@distance_change", SqliteType.Text));
+
+                int i;
+                for (i = 0; i < rows.Length; i++)
+                {
+                    ConditionStatsBaseRow r = rows[i];
+
+                    cmd.Parameters["@race_id"].Value = r.RaceId;
+                    cmd.Parameters["@umaban"].Value = r.Umaban;
+                    cmd.Parameters["@horse_id"].Value = (object?)r.HorseId ?? DBNull.Value;
+                    cmd.Parameters["@race_date"].Value = r.RaceDate;
+                    cmd.Parameters["@jyo_cd"].Value = r.JyoCd;
+                    cmd.Parameters["@race_no"].Value = r.RaceNo;
+                    cmd.Parameters["@race_name"].Value = (object?)r.RaceName ?? DBNull.Value;
+                    cmd.Parameters["@class_name"].Value = (object?)r.ClassName ?? DBNull.Value;
+                    cmd.Parameters["@grade_cd"].Value = (object?)r.GradeCd ?? DBNull.Value;
+                    cmd.Parameters["@win5_flg"].Value = r.Win5Flg;
+                    cmd.Parameters["@surface"].Value = (object?)r.Surface ?? DBNull.Value;
+                    cmd.Parameters["@distance_m"].Value = (object?)r.DistanceM ?? DBNull.Value;
+                    cmd.Parameters["@baba_text"].Value = (object?)r.BabaText ?? DBNull.Value;
+                    cmd.Parameters["@wakuban"].Value = (object?)r.Wakuban ?? DBNull.Value;
+                    cmd.Parameters["@jockey_name"].Value = (object?)r.JockeyName ?? DBNull.Value;
+                    cmd.Parameters["@sire_name"].Value = (object?)r.SireName ?? DBNull.Value;
+                    cmd.Parameters["@running_style"].Value = (object?)r.RunningStyle ?? DBNull.Value;
+                    cmd.Parameters["@finish_pos"].Value = (object?)r.FinishPos ?? DBNull.Value;
+                    cmd.Parameters["@sex"].Value = (object?)r.Sex ?? DBNull.Value;
+                    cmd.Parameters["@age"].Value = (object?)r.Age ?? DBNull.Value;
+                    cmd.Parameters["@popularity"].Value = (object?)r.Popularity ?? DBNull.Value;
+                    cmd.Parameters["@weight_carried"].Value = (object?)r.WeightCarried ?? DBNull.Value;
+                    cmd.Parameters["@horse_weight"].Value = (object?)r.HorseWeight ?? DBNull.Value;
+                    cmd.Parameters["@payout_win_yen"].Value = (object?)r.PayoutWinYen ?? DBNull.Value;
+                    cmd.Parameters["@payout_place_yen"].Value = (object?)r.PayoutPlaceYen ?? DBNull.Value;
+                    cmd.Parameters["@prev_class"].Value = (object?)r.PrevClass ?? DBNull.Value;
+                    cmd.Parameters["@prev_distance_m"].Value = (object?)r.PrevDistanceM ?? DBNull.Value;
+                    cmd.Parameters["@distance_change"].Value = (object?)r.DistanceChange ?? DBNull.Value;
+
+                    cmd.ExecuteNonQuery();
+                }
+            }
+        }
+
+        /// <summary>
         /// dim_race をINSERTする（過去側）。
         /// </summary>
         public static void InsertDimRaceHistory(SqliteConnection conn, SqliteTransaction tx, DimRaceRow[] rows)

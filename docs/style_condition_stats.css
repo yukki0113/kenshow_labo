@@ -5,6 +5,7 @@
   --muted: #6b7280;
   --border: #dbe3ef;
   --accent: #2563eb;
+  --accent-soft: #eff6ff;
 }
 
 * {
@@ -60,14 +61,26 @@ main {
   flex-wrap: wrap;
 }
 
-.grid {
+.status-row {
+  margin-top: 12px;
+}
+
+.filters-grid {
   display: grid;
   gap: 12px;
   margin-top: 12px;
 }
 
-.grid-3 {
+.filters-grid-main {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.filters-grid-advanced {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.field-span-2 {
+  grid-column: span 2;
 }
 
 label {
@@ -111,6 +124,38 @@ button.active {
   border-color: var(--accent);
 }
 
+.filter-advanced {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fafcff;
+  overflow: hidden;
+}
+
+.filter-advanced summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 12px 14px;
+  font-weight: 600;
+}
+
+.filter-advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.filter-advanced[open] summary {
+  border-bottom: 1px solid var(--border);
+  background: var(--accent-soft);
+}
+
+.filter-advanced > :not(summary) {
+  padding: 0 14px 14px 14px;
+}
+
+.filter-actions {
+  margin-top: 16px;
+}
+
 .pre {
   white-space: pre-wrap;
   background: #0f172a;
@@ -147,14 +192,21 @@ button.active {
 
 .tabs {
   display: flex;
-  flex-wrap: wrap;
   gap: 8px;
   margin-top: 8px;
   margin-bottom: 16px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+
+.tabs button {
+  flex: 0 0 auto;
 }
 
 .table-wrap {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 table {
@@ -188,4 +240,31 @@ th {
   background: #fff7ed;
   border: 1px solid #fed7aa;
   color: #9a3412;
+}
+
+@media (max-width: 768px) {
+  .card {
+    padding: 16px;
+  }
+
+  .row {
+    align-items: stretch;
+  }
+
+  .filters-grid-main,
+  .filters-grid-advanced {
+    grid-template-columns: 1fr;
+  }
+
+  .field-span-2 {
+    grid-column: span 1;
+  }
+
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  table {
+    min-width: 760px;
+  }
 }
